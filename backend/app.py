@@ -1,11 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
+from logger import log_result
+from urllib.parse import urlparse
 
 from feature_extractor import extract_features
 
 app = Flask(__name__)
 CORS(app)
+
+def is_valid_url(url):
+    parsed = urlparse(url)
+    return bool(parsed.scheme and parsed.netloc)
 
 # Load trained model
 model = pickle.load(open("model.pkl", "rb"))
@@ -22,6 +28,9 @@ def analyze():
     if not url:
         return jsonify({"error": "URL required"}), 400
 
+    if not is_valid_url(url):
+        return jsonify({"error": "Invalid URL"}), 400
+
     # Extract features
     features = extract_features(url)
 
@@ -32,7 +41,17 @@ def analyze():
     prob = model.predict_proba([features])[0][1]
     risk_score = int(prob * 100)
 
+    if risk_score > 80:
+        confidence = "High"
+    elif risk_score > 50:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
     result = "phishing" if prediction == 1 else "safe"
+
+    #logging
+    log_result(url, result, risk_score)
 
     # Explanation engine
     reasons = []
@@ -60,6 +79,7 @@ def analyze():
         "url": url,
         "result": result,
         "risk_score": risk_score,
+        "confidence": confidence,
         "reasons": reasons
     })
 
