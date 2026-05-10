@@ -3,6 +3,7 @@ from flask_cors import CORS
 import pickle
 from logger import log_result
 from urllib.parse import urlparse
+from history import add_history, get_history 
 
 from feature_extractor import extract_features
 
@@ -36,6 +37,12 @@ def analyze():
 
     # Prediction
     prediction = model.predict([features])[0]
+
+    add_history({
+    "url": url,
+    "result": result,
+    "risk_score": risk_score
+    })
 
     # Risk score (probability)
     prob = model.predict_proba([features])[0][1]
