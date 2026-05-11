@@ -24,11 +24,12 @@ def home():
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
-    url = data.get("url")
 
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+    url = data.get("url")
     if not url:
         return jsonify({"error": "URL required"}), 400
-
     if not is_valid_url(url):
         return jsonify({"error": "Invalid URL"}), 400
 
@@ -37,12 +38,6 @@ def analyze():
 
     # Prediction
     prediction = model.predict([features])[0]
-
-    add_history({
-    "url": url,
-    "result": result,
-    "risk_score": risk_score
-    })
 
     # Risk score (probability)
     prob = model.predict_proba([features])[0][1]
@@ -59,6 +54,13 @@ def analyze():
 
     #logging
     log_result(url, result, risk_score)
+
+    # history
+    add_history({
+    "url": url,
+    "result": result,
+    "risk_score": risk_score
+    })
 
     # Explanation engine
     reasons = []
@@ -89,6 +91,10 @@ def analyze():
         "confidence": confidence,
         "reasons": reasons
     })
+
+@app.route("/history")
+def history():
+    return jsonify(get_history())
 
 if __name__ == "__main__":
     app.run(debug=True)
