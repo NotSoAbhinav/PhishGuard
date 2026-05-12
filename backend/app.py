@@ -4,6 +4,7 @@ import pickle
 from logger import log_result
 from urllib.parse import urlparse
 from history import add_history, get_history 
+from cache import get_cached, set_caches
 
 from feature_extractor import extract_features
 
