@@ -4,7 +4,7 @@ import pickle
 from logger import log_result
 from urllib.parse import urlparse
 from history import add_history, get_history 
-from cache import get_cached, set_caches
+from cache import get_cached, set_cache
 
 from feature_extractor import extract_features
 
@@ -91,14 +91,19 @@ def analyze():
     if url.count(".") > 3:
         reasons.append("Too many subdomains")
 
-    # Response
-    return jsonify({
+    response_data = {
         "url": url,
         "result": result,
         "risk_score": risk_score,
         "confidence": confidence,
-        "reasons": reasons
-    })
+        "reasons": reasons,
+        "cached": False
+    }
+
+    # Save in cache
+    set_cache(url, response_data)
+
+    return jsonify(response_data)
 
 @app.route("/history")
 def history():
