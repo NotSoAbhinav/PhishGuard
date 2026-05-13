@@ -33,6 +33,13 @@ def analyze():
         return jsonify({"error": "URL required"}), 400
     if not is_valid_url(url):
         return jsonify({"error": "Invalid URL"}), 400
+    
+    # Check cache
+    cached = get_cached(url)
+
+    if cached:
+        cached["cached"] = True
+        return jsonify(cached)
 
     # Extract features
     features = extract_features(url)
