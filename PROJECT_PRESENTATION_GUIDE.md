@@ -36,11 +36,10 @@ graph TD
     
     User -->|9. Submits Correction Feedback| API
     API -->|10. Appends to dataset/urls.csv| Disk[(Local Disk)]
-    API -->|11. Increments pending counter| State[feedback_state.json]
-    API -->|12. Triggers Retraining thread| Train[Train Model & Update version]
+    API -->|11. Triggers Retraining thread| Train[Train Model & Update version]
     
-    State -->|13. Threshold met e.g., 50| Push[GitHub Contents API Sync]
-    Push -->|14. Commits urls.csv, model.pkl & metadata.json| Git[(GitHub Repo)]
+    Train -->|12. Syncs Immediately| Push[GitHub Contents API Sync]
+    Push -->|13. Commits urls.csv, model.pkl & metadata.json| Git[(GitHub Repo)]
 ```
 
 ---
@@ -67,7 +66,7 @@ When an examiner asks, *"How does your AI know if a link is fake?"*, you explain
 | **Brand Spoofing** | Heuristic | Looks for brand keywords (e.g., `paypal`, `netflix`) outside official hostnames. |
 | **Shannon Entropy** | Complexity | Measures random text complexity (high entropy indicates machine-generated domains). |
 | **Vowel Ratio** | Lexical | Natural language words have balanced vowel ratios. Phishing domains don't. |
-| **Host Keyword** | Heical | Domain hostname contains words like `secure`, `webscr`, `login`, `bank`. |
+| **Host Keyword** | Heuristic | Domain hostname contains words like `secure`, `webscr`, `login`, `bank`. |
 | **Consecutive Characters** | Complexity | Too many consecutive repeating symbols or dashes. |
 | **Typosquatting** | Heuristic | Visual similarity checks (e.g., `paypa1`, `go0gle`). |
 | **Domain Digit Count** | Lexical | Absolute count of digits inside the hostname. |
@@ -92,10 +91,10 @@ When an examiner asks, *"How does your AI know if a link is fake?"*, you explain
 * **Answer**: *"Deep Learning models require massive datasets, long training times, and expensive GPU resources. Random Forest runs predictions in under 5 milliseconds on a single CPU core, handles mixed numeric/binary tabular features beautifully, and can be retrained in under 3 seconds in our live feedback loop, which is critical for lightweight, free cloud deployments."*
 
 ### Q2: *"Render has an ephemeral disk. When it sleeps, doesn't it lose all the retrained models and feedback data?"*
-* **Answer**: *"Yes, Render's free tier has an ephemeral disk that resets daily. We solved this constraint by designing a **GitHub Auto-Sync mechanism** using the GitHub Contents API. Every 50 user feedback entries collected (controlled by the threshold variable), the backend retrains the model, increments the patch version, and pushes `urls.csv`, `model_metadata.json`, and the binary `model.pkl` back to our GitHub repository. When Render wakes up, it loads the latest pushed model, ensuring zero data loss and persistent self-evolution on 100% free hosting."*
+* **Answer**: *"Yes, Render's free tier has an ephemeral disk that resets daily. We solved this constraint by designing a **GitHub Auto-Sync mechanism** using the GitHub Contents API. Every time a user provides a correction feedback correction, the backend immediately retrains the model, increments the patch version, and pushes `urls.csv`, `model_metadata.json`, and the binary `model.pkl` back to our GitHub repository. When Render wakes up, it loads the latest pushed model, ensuring zero data loss and persistent self-evolution on 100% free hosting."*
 
-### Q3: *"Wait, doesn't pushing to GitHub trigger a continuous deployment build loop on Render/Vercel?"*
+### Q3: *"Wait, doesn't pushing to GitHub trigger a continuous deployment build loop on Render/Vercel every time?"*
 * **Answer**: *"No. We append `[skip ci]` to our git commit message. Both Render and Vercel read this tag and skip compiling a new build, preventing continuous deployment loops while securing our model files."*
 
 ### Q4: *"What is the purpose of the threshold slider on the frontend?"*
-* **Answer**: *"The slider adjusts the decision boundary threshold of the model locally. The Random Forest model outputs a risk probability from 0% to 100%. By moving the slider, we can dynamically change the classification strictness (e.g., a 40% threshold flags suspicous links faster, whereas a 70% threshold reduces false alarms). This is done entirely client-side without retraining."*
+* **Answer**: *"The slider adjusts the decision boundary threshold of the model locally. The Random Forest model outputs a risk probability from 0% to 100%. By moving the slider, we can dynamically change the classification strictness (e.g., a 40% threshold flags suspicious links faster, whereas a 70% threshold reduces false alarms). This is done entirely client-side without retraining."*
