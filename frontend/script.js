@@ -24,7 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initChart();
   verifyApiHealth();
   updateThresholdDisplay(50);
-  loadCachedSessionHistory();
 });
 
 // 2. Verify API Health and Fetch Version / Metrics
@@ -44,8 +43,9 @@ async function verifyApiHealth() {
       statusIndicator.querySelector(".status-text").innerText = "API Online";
       modelVerBadge.innerText = `v${data.model_version}`;
       
-      // Load general statistics
+      // Load general statistics and history feed
       fetchGlobalStats();
+      fetchHistory();
     } else {
       throw new Error("API responded with error");
     }
@@ -197,7 +197,7 @@ async function analyzeURL() {
 
     // Refresh metrics counters and history
     fetchGlobalStats();
-    addHistoryItem(data.url, data.result, data.risk_score);
+    fetchHistory();
 
   } catch (error) {
     console.error("Analysis failed:", error);
@@ -435,47 +435,42 @@ async function submitFeedback(label) {
   }
 }
 
-// 12. History Feeds
-function loadCachedSessionHistory() {
-  const historyList = document.getElementById("historyList");
-  const cached = sessionStorage.getItem("phishguard_scans");
-  
-  if (cached) {
-    sessionHistory = JSON.parse(cached);
-    // Rebuild counts
-    sessionCounts = { safe: 0, phishing: 0 };
-    sessionHistory.forEach(item => {
-      if (item.result === "phishing") sessionCounts.phishing++;
-      else sessionCounts.safe++;
+// 12. History Feeds (Synced from Server)
+let sessionHistory = [];
+
+async function fetchHistory() {
+  try {
+    const res = await fetch(`${API_BASE}/history`, {
+      method: "GET",
+      headers: { 
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json"
+      }
     });
 
-    updateChartDistribution();
-    renderHistoryList();
+    if (res.ok) {
+      const data = await res.json();
+      // Map backend history (contains array of { url, result, risk_score })
+      sessionHistory = data.map(item => ({
+        url: item.url,
+        result: item.result,
+        risk_score: item.risk_score,
+        timestamp: "Recent"
+      })).reverse(); // Reverse so latest scans are at the top
+
+      // Rebuild counts
+      sessionCounts = { safe: 0, phishing: 0 };
+      sessionHistory.forEach(item => {
+        if (item.result === "phishing") sessionCounts.phishing++;
+        else sessionCounts.safe++;
+      });
+
+      updateChartDistribution();
+      renderHistoryList();
+    }
+  } catch (err) {
+    console.error("Failed to fetch history:", err);
   }
-}
-
-function addHistoryItem(url, result, riskScore) {
-  // Prevent duplicate additions in feed list
-  if (sessionHistory.some(item => item.url === url)) return;
-
-  const item = { url, result, risk_score: riskScore, timestamp: new Date().toLocaleTimeString() };
-  sessionHistory.unshift(item); // Add to beginning
-
-  // Limit cache feed to last 10 entries
-  if (sessionHistory.length > 10) {
-    sessionHistory.pop();
-  }
-
-  // Update session counts
-  if (result === "phishing") {
-    sessionCounts.phishing++;
-  } else {
-    sessionCounts.safe++;
-  }
-
-  sessionStorage.setItem("phishguard_scans", JSON.stringify(sessionHistory));
-  updateChartDistribution();
-  renderHistoryList();
 }
 
 function renderHistoryList() {
@@ -517,8 +512,7 @@ function renderHistoryList() {
 
     // Make row clickable to reload details
     div.addEventListener("click", () => {
-      // Find scan in session or construct fake scan state to reload
-      urlInput.value = item.url;
+      document.getElementById("urlInput").value = item.url;
       analyzeURL();
     });
 
