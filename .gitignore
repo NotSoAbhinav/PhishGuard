@@ -22,10 +22,13 @@ dist/
 # ----------------------
 model.pkl
 *.joblib
+!backend/model.pkl
+!backend/model_metadata.json
 
 # Large data (keep small sample only)
 dataset/*.csv
 !dataset/sample_urls.csv
+!dataset/urls.csv
 
 # Logs
 *.log
