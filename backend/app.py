@@ -215,7 +215,7 @@ def analyze():
     reasons = []
 
     # Map the explanations from the 24 features
-    if features[7] == 1: # IP address
+    if features[8] == 1: # IP address
         reasons.append({"severity": "critical", "message": "Uses numerical IP address instead of domain name (high threat indicators)."})
     if features[15] == 1: # Brand spoofing
         reasons.append({"severity": "critical", "message": "Brand spoofing: URL mimics a major brand name on an unofficial domain."})
