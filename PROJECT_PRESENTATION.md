@@ -1,4 +1,4 @@
-# PhishGuard: Technical Recruiter & Engineering Presentation Guide 🛡️
+# PhishGuard: Project Presentation 🛡️
 
 Welcome to **PhishGuard**, an intelligent, real-time phishing threat auditor. This document is designed for technical recruiters, hiring managers, and system architects. It highlights the engineering decisions, system design patterns, and machine learning pipeline that make PhishGuard a highly efficient, production-ready security tool.
 
