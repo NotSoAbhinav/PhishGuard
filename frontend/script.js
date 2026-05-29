@@ -167,6 +167,22 @@ async function analyzeURL() {
   scanButton.disabled = true;
   btnSpinner.classList.remove("hidden");
 
+  // Show radial gauge in auditing state during API request
+  const gaugePlaceholder = document.getElementById("gaugePlaceholder");
+  const gaugeSection = document.getElementById("gaugeSection");
+  const radialGauge = document.querySelector(".radial-gauge");
+  const riskPercent = document.getElementById("riskPercent");
+  const riskLevel = document.getElementById("riskLevel");
+
+  if (gaugePlaceholder && gaugeSection && radialGauge && riskPercent && riskLevel) {
+    gaugePlaceholder.classList.add("hidden");
+    gaugeSection.classList.remove("hidden");
+    radialGauge.classList.add("scanning");
+    riskPercent.innerText = "---";
+    riskLevel.innerText = "AUDITING";
+    riskLevel.style.color = "var(--primary)";
+  }
+
   try {
     const response = await fetch(`${API_BASE}/analyze`, {
       method: "POST",
@@ -204,9 +220,19 @@ async function analyzeURL() {
     showToast(error.message || "Failed to contact API backend.", "❌");
     validationError.innerText = error.message || "Failed to contact API backend.";
     validationError.classList.remove("hidden");
+    
+    // Restore placeholder if there's no previous scan result
+    if (!currentScan && gaugePlaceholder && gaugeSection) {
+      gaugePlaceholder.classList.remove("hidden");
+      gaugeSection.classList.add("hidden");
+    }
   } finally {
     scanButton.disabled = false;
     btnSpinner.classList.add("hidden");
+    const radialGauge = document.querySelector(".radial-gauge");
+    if (radialGauge) {
+      radialGauge.classList.remove("scanning");
+    }
   }
 }
 

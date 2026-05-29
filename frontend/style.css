@@ -46,8 +46,10 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-app);
   background-image: 
-    radial-gradient(at 10% 5%, rgba(59, 130, 246, 0.06) 0px, transparent 40%),
-    radial-gradient(at 90% 95%, rgba(6, 182, 212, 0.06) 0px, transparent 45%);
+    radial-gradient(rgba(255, 255, 255, 0.018) 1.2px, transparent 0),
+    radial-gradient(at 5% 5%, rgba(59, 130, 246, 0.09) 0px, transparent 45%),
+    radial-gradient(at 95% 95%, rgba(139, 92, 246, 0.09) 0px, transparent 50%);
+  background-size: 28px 28px, 100% 100%, 100% 100%;
   background-attachment: fixed;
   color: var(--text-primary);
   min-height: 100vh;
@@ -189,11 +191,13 @@ body {
   border-radius: 16px;
   backdrop-filter: blur(16px);
   box-shadow: var(--glow-shadow);
-  transition: var(--transition);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .card:hover {
-  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-3px);
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 20px rgba(59, 130, 246, 0.05);
 }
 
 .card-header {
@@ -387,8 +391,9 @@ body {
 }
 
 #scanButton:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
+  filter: brightness(1.12);
+  transform: translateY(-1.5px);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.45), 0 4px 14px var(--primary-glow);
 }
 
 .btn-spinner {
@@ -572,6 +577,24 @@ body {
 .gauge-meter {
   stroke-linecap: round;
   transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Scanning Animation Overlay */
+.radial-gauge.scanning svg {
+  animation: gaugeRotate 1.5s linear infinite;
+}
+.radial-gauge.scanning .gauge-meter {
+  stroke: var(--primary) !important;
+  stroke-dashoffset: 230 !important; /* Partial segment */
+  animation: gaugePulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes gaugeRotate {
+  0% { transform: rotate(-90deg); }
+  100% { transform: rotate(270deg); }
+}
+@keyframes gaugePulse {
+  0% { opacity: 0.35; filter: drop-shadow(0 0 2px var(--primary-glow)); }
+  100% { opacity: 1; filter: drop-shadow(0 0 10px var(--primary)); }
 }
 
 .gauge-content {
