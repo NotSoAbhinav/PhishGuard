@@ -1,6 +1,6 @@
-# PhishGuard B.Tech Project Presentation Guide 🎓
+# PhishGuard Project Presentation Guide 🎓
 
-This guide serves as a comprehensive preparation sheet for presenting PhishGuard as a B.Tech Final Year / Semester project. It outlines the architecture, data pipeline, Machine Learning choices, and answers to common defense questions from examiners.
+This guide serves as a comprehensive preparation sheet for presenting PhishGuard as project. It outlines the architecture, data pipeline, Machine Learning choices, and answers to common defense questions from examiners.
 
 ---
 
