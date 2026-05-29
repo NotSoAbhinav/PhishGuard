@@ -39,7 +39,7 @@ graph TD
     API -->|11. Triggers Retraining thread| Train[Train Model & Update version]
     
     Train -->|12. Syncs Immediately| Push[GitHub Contents API Sync]
-    Push -->|13. Commits urls.csv, model.pkl & metadata.json| Git[(GitHub Repo)]
+    Push -->|13. Commits to model-sync branch| Git[(GitHub Repo model-sync branch)]
 ```
 
 ---
@@ -91,7 +91,7 @@ When an examiner asks, *"How does your AI know if a link is fake?"*, you explain
 * **Answer**: *"Deep Learning models require massive datasets, long training times, and expensive GPU resources. Random Forest runs predictions in under 5 milliseconds on a single CPU core, handles mixed numeric/binary tabular features beautifully, and can be retrained in under 3 seconds in our live feedback loop, which is critical for lightweight, free cloud deployments."*
 
 ### Q2: *"Render has an ephemeral disk. When it sleeps, doesn't it lose all the retrained models and feedback data?"*
-* **Answer**: *"Yes, Render's free tier has an ephemeral disk that resets daily. We solved this constraint by designing a **GitHub Auto-Sync mechanism** using the GitHub Contents API. Every time a user provides a correction feedback correction, the backend immediately retrains the model, increments the patch version, and pushes `urls.csv`, `model_metadata.json`, and the binary `model.pkl` back to our GitHub repository. When Render wakes up, it loads the latest pushed model, ensuring zero data loss and persistent self-evolution on 100% free hosting."*
+* **Answer**: *"Yes, Render's free tier has an ephemeral disk that resets daily. We solved this constraint by designing an **MLOps data branch structure**. The backend pushes the updated `urls.csv`, `model_metadata.json`, and `model.pkl` to a dedicated **`model-sync`** branch. Render is configured to run the server from the `model-sync` branch. This preserves all self-evolving models across restarts, while keeping the developer's **`main`** branch commit history completely pristine."*
 
 ### Q3: *"Wait, doesn't pushing to GitHub trigger a continuous deployment build loop on Render/Vercel every time?"*
 * **Answer**: *"No. We append `[skip ci]` to our git commit message. Both Render and Vercel read this tag and skip compiling a new build, preventing continuous deployment loops while securing our model files."*

@@ -39,19 +39,20 @@ model_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(model_dir, "model.pkl")
 metadata_path = os.path.join(model_dir, "model_metadata.json")
 
-def push_to_github(file_path, github_repo, github_path, commit_message, pat):
+def push_to_github(file_path, github_repo, github_path, commit_message, pat, branch="model-sync"):
     """
     Pushes a local file to a GitHub repository using the GitHub Contents API.
     """
     url = f"https://api.github.com/repos/{github_repo}/contents/{github_path}"
+    get_url = f"{url}?ref={branch}"
     headers = {
         "Authorization": f"token {pat}",
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "PhishGuard-App"
     }
     
-    # 1. Get file SHA if it exists
-    req = urllib.request.Request(url, headers=headers)
+    # 1. Get file SHA if it exists on the specified branch
+    req = urllib.request.Request(get_url, headers=headers)
     sha = None
     try:
         with urllib.request.urlopen(req) as response:
@@ -59,10 +60,10 @@ def push_to_github(file_path, github_repo, github_path, commit_message, pat):
             sha = res_data.get("sha")
     except urllib.error.HTTPError as e:
         if e.code != 404: # 404 means file doesn't exist yet, which is fine
-            print(f"Error fetching file SHA from GitHub ({github_path}): {e.code} - {e.read().decode()}")
+            print(f"Error fetching file SHA from GitHub ({github_path}) on branch {branch}: {e.code} - {e.read().decode()}")
             return False
     except Exception as e:
-        print(f"Connection error fetching SHA from GitHub ({github_path}): {e}")
+        print(f"Connection error fetching SHA from GitHub ({github_path}) on branch {branch}: {e}")
         return False
     
     # 2. Base64 encode local file contents
@@ -78,7 +79,7 @@ def push_to_github(file_path, github_repo, github_path, commit_message, pat):
     payload = {
         "message": commit_message,
         "content": encoded_content,
-        "branch": "main"
+        "branch": branch
     }
     if sha:
         payload["sha"] = sha
@@ -94,16 +95,16 @@ def push_to_github(file_path, github_repo, github_path, commit_message, pat):
     try:
         with urllib.request.urlopen(req_put) as response:
             if response.status in [200, 201]:
-                print(f"Successfully pushed {github_path} to GitHub!")
+                print(f"Successfully pushed {github_path} to branch {branch}!")
                 return True
             else:
-                print(f"Failed to push {github_path} to GitHub. Status: {response.status}")
+                print(f"Failed to push {github_path} to branch {branch}. Status: {response.status}")
                 return False
     except urllib.error.HTTPError as e:
-        print(f"HTTP error pushing {github_path}: {e.code} - {e.read().decode()}")
+        print(f"HTTP error pushing {github_path} to branch {branch}: {e.code} - {e.read().decode()}")
         return False
     except Exception as e:
-        print(f"Connection error pushing {github_path}: {e}")
+        print(f"Connection error pushing {github_path} to branch {branch}: {e}")
         return False
 
 # In-memory SaaS statistics tracker
@@ -170,7 +171,7 @@ def stats_endpoint():
         except Exception:
             pass
             
-    sync_threshold = int(os.environ.get("GITHUB_SYNC_THRESHOLD", 50))
+    sync_threshold = int(os.environ.get("GITHUB_SYNC_THRESHOLD", 10))
     
     return jsonify({
         "total_scans": total,
@@ -397,64 +398,104 @@ def feedback():
     except Exception as e:
         return jsonify({"error": f"Failed to save feedback: {str(e)}"}), 500
 
-    # Determine incremented patch version (e.g. 3.0.0 -> 3.0.1)
-    current_ver = model_metadata.get("version", "3.0.0")
-    try:
-        parts = current_ver.split(".")
-        if len(parts) == 3:
-            parts[2] = str(int(parts[2]) + 1)
-            new_ver = ".".join(parts)
-        else:
-            new_ver = "3.0.1"
-    except Exception:
-        new_ver = "3.0.1"
-
-    # Background retraining
-    def retrain_task(version_str):
-        global model, model_metadata
+    # Manage pending feedback batch counter (threshold set to 10)
+    state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback_state.json")
+    pending_count = 0
+    if os.path.exists(state_path):
         try:
-            print(f"Background retraining started. Target version: {version_str}...")
-            new_model, _ = train_and_save_model(dataset_path=dataset_path, model_path=model_path, version=version_str)
-            model = new_model
-            # Reload metadata
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    model_metadata = json.load(f)
-            clear_cache()
-            print(f"Model successfully evolved to version {version_str}.")
+            with open(state_path, "r") as f:
+                state_data = json.load(f)
+                pending_count = state_data.get("pending_feedback_count", 0)
+        except Exception:
+            pass
             
-            # Sync to GitHub immediately
-            pat = os.environ.get("GITHUB_PAT")
-            repo = os.environ.get("GITHUB_REPO", "NotSoAbhinav/PhishGuard")
-            if pat:
-                print(f"Pushing updated model and dataset to GitHub repository '{repo}'...")
-                commit_msg = f"Auto-evolve model and sync dataset to v{version_str} [skip ci]"
-                
-                success1 = push_to_github(dataset_path, repo, "dataset/urls.csv", commit_msg, pat)
-                success2 = push_to_github(metadata_path, repo, "backend/model_metadata.json", commit_msg, pat)
-                success3 = push_to_github(model_path, repo, "backend/model.pkl", commit_msg, pat)
-                
-                if success1 and success2 and success3:
-                    print("GitHub Auto-Sync complete. All files pushed successfully.")
-                else:
-                    print("GitHub Auto-Sync failed. See logs.")
+    pending_count += 1
+    
+    sync_threshold = int(os.environ.get("GITHUB_SYNC_THRESHOLD", 10))
+    should_retrain = False
+    
+    if pending_count >= sync_threshold:
+        should_retrain = True
+        pending_count = 0
+        
+    try:
+        with open(state_path, "w") as f:
+            json.dump({"pending_feedback_count": pending_count}, f)
+    except Exception as e:
+        print(f"Failed to save feedback state counter: {e}")
+
+    current_ver = model_metadata.get("version", "3.0.0")
+
+    if should_retrain:
+        # Determine incremented patch version (e.g. 3.0.0 -> 3.0.1)
+        try:
+            parts = current_ver.split(".")
+            if len(parts) == 3:
+                parts[2] = str(int(parts[2]) + 1)
+                new_ver = ".".join(parts)
             else:
-                print("WARNING: GITHUB_PAT env variable is not set. Skipping GitHub push sync.")
-        except Exception as err:
-            print(f"Error during background retraining: {err}")
+                new_ver = "3.0.1"
+        except Exception:
+            new_ver = "3.0.1"
 
-    threading.Thread(target=retrain_task, args=(new_ver,)).start()
+        # Background retraining
+        def retrain_task(version_str):
+            global model, model_metadata
+            try:
+                print(f"Background retraining started. Target version: {version_str}...")
+                new_model, _ = train_and_save_model(dataset_path=dataset_path, model_path=model_path, version=version_str)
+                model = new_model
+                # Reload metadata
+                if os.path.exists(metadata_path):
+                    with open(metadata_path, "r") as f:
+                        model_metadata = json.load(f)
+                clear_cache()
+                print(f"Model successfully evolved to version {version_str}.")
+                
+                # Sync to GitHub immediately after retraining
+                pat = os.environ.get("GITHUB_PAT")
+                repo = os.environ.get("GITHUB_REPO", "NotSoAbhinav/PhishGuard")
+                branch = os.environ.get("GITHUB_SYNC_BRANCH", "model-sync")
+                if pat:
+                    print(f"Pushing updated model and dataset to GitHub repository '{repo}' (branch: {branch})...")
+                    commit_msg = f"Auto-evolve model and sync dataset to v{version_str} [skip ci]"
+                    
+                    success1 = push_to_github(dataset_path, repo, "dataset/urls.csv", commit_msg, pat, branch=branch)
+                    success2 = push_to_github(metadata_path, repo, "backend/model_metadata.json", commit_msg, pat, branch=branch)
+                    success3 = push_to_github(model_path, repo, "backend/model.pkl", commit_msg, pat, branch=branch)
+                    
+                    if success1 and success2 and success3:
+                        print(f"GitHub Auto-Sync complete on branch '{branch}'. All files pushed successfully.")
+                    else:
+                        print("GitHub Auto-Sync failed. See logs.")
+                else:
+                    print("WARNING: GITHUB_PAT env variable is not set. Skipping GitHub push sync.")
+            except Exception as err:
+                print(f"Error during background retraining: {err}")
 
-    return jsonify({
-        "status": "success",
-        "message": "Feedback recorded. Model is retraining and syncing in the background.",
-        "target_version": new_ver,
-        "url": url,
-        "label": label,
-        "pending_feedback_count": 0,
-        "github_sync_threshold": 1,
-        "synced": True
-    })
+        threading.Thread(target=retrain_task, args=(new_ver,)).start()
+
+        return jsonify({
+            "status": "success",
+            "message": "Feedback threshold reached. Model is retraining and syncing in the background.",
+            "target_version": new_ver,
+            "url": url,
+            "label": label,
+            "pending_feedback_count": pending_count,
+            "github_sync_threshold": sync_threshold,
+            "synced": True
+        })
+    else:
+        return jsonify({
+            "status": "success",
+            "message": "Feedback recorded. Model update queued.",
+            "target_version": current_ver,
+            "url": url,
+            "label": label,
+            "pending_feedback_count": pending_count,
+            "github_sync_threshold": sync_threshold,
+            "synced": False
+        })
 
 @app.route("/history/clear", methods=["POST"])
 @require_api_key

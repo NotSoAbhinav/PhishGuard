@@ -57,6 +57,20 @@ function animateValue(id, start, end, duration, suffix = "") {
   window.requestAnimationFrame(step);
 }
 
+// Helper: Update the sync queue progress badge
+function updatePendingFeedbackUI(count, threshold) {
+  const badge = document.getElementById("syncStatusBadge");
+  const numText = document.getElementById("syncQueueNumber");
+  if (!badge || !numText) return;
+  
+  if (count !== undefined && count > 0) {
+    numText.innerText = `${count}/${threshold}`;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
 // 2. Verify API Health and Fetch Version / Metrics
 async function verifyApiHealth() {
   const statusIndicator = document.getElementById("statusIndicator");
@@ -120,6 +134,9 @@ async function fetchGlobalStats() {
       animateValue("statAccuracy", currentAccuracy, stats.cv_accuracy, 1000, "%");
       
       document.getElementById("modelVerBadge").innerText = `v${stats.model_version}`;
+      
+      // Update sync queue badge status
+      updatePendingFeedbackUI(stats.pending_feedback_count, stats.github_sync_threshold);
     }
   } catch (err) {
     console.error("Failed to load global statistics:", err);
