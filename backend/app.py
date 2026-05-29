@@ -38,6 +38,7 @@ db_lock = threading.Lock()
 model_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(model_dir, "model.pkl")
 metadata_path = os.path.join(model_dir, "model_metadata.json")
+dataset_path = os.path.join(os.path.dirname(model_dir), "dataset", "urls.csv")
 
 def push_to_github(file_path, github_repo, github_path, commit_message, pat, branch="model-sync"):
     """
@@ -107,6 +108,42 @@ def push_to_github(file_path, github_repo, github_path, commit_message, pat, bra
         print(f"Connection error pushing {github_path} to branch {branch}: {e}")
         return False
 
+def pull_from_github(github_repo, github_path, local_path, pat, branch="model-sync"):
+    """
+    Downloads a file from GitHub contents API and writes it locally.
+    """
+    url = f"https://api.github.com/repos/{github_repo}/contents/{github_path}?ref={branch}"
+    headers = {
+        "Authorization": f"token {pat}",
+        "Accept": "application/vnd.github.v3.raw",
+        "User-Agent": "PhishGuard-App"
+    }
+    
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        print(f"Sync: Downloading {github_path} from branch '{branch}'...")
+        with urllib.request.urlopen(req) as response:
+            content = response.read()
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            with open(local_path, "wb") as f:
+                f.write(content)
+            print(f"Sync: Successfully downloaded and updated {local_path}")
+            return True
+    except Exception as e:
+        print(f"Sync: Failed to download {github_path} from GitHub: {e}")
+        return False
+
+# Sync latest data & model from GitHub if credentials are set
+pat = os.environ.get("GITHUB_PAT")
+repo = os.environ.get("GITHUB_REPO")
+branch = os.environ.get("GITHUB_SYNC_BRANCH", "model-sync")
+
+if pat and repo:
+    print("Syncing latest model and dataset from GitHub at startup...")
+    pull_from_github(repo, "dataset/urls.csv", dataset_path, pat, branch=branch)
+    pull_from_github(repo, "backend/model_metadata.json", metadata_path, pat, branch=branch)
+    pull_from_github(repo, "backend/model.pkl", model_path, pat, branch=branch)
+
 # In-memory SaaS statistics tracker
 stats = {
     "total_scans": 0,
@@ -163,7 +200,6 @@ def stats_endpoint():
     # Load pending count by comparing current dataset samples with model samples
     pending_count = 0
     trained_samples = model_metadata.get("samples_count", 200)
-    dataset_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dataset", "urls.csv")
     if os.path.exists(dataset_path):
         try:
             with open(dataset_path, "r", encoding="utf-8") as f:
@@ -390,8 +426,6 @@ def feedback():
 
     if label not in [0, 1]:
         return jsonify({"error": "Label must be 0 or 1"}), 400
-
-    dataset_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dataset", "urls.csv")
 
     try:
         with db_lock:
