@@ -46,13 +46,16 @@ stats = {
 
 # Load model and versioning metadata
 model_metadata = {}
-if os.path.exists(model_path) and os.path.exists(metadata_path):
-    print(f"Loading model from {model_path}...")
-    model = pickle.load(open(model_path, "rb"))
-    with open(metadata_path, "r") as f:
-        model_metadata = json.load(f)
-else:
-    print("Baseline model not found. Training version 3.0.0 model...")
+try:
+    if os.path.exists(model_path) and os.path.exists(metadata_path):
+        print(f"Loading model from {model_path}...")
+        model = pickle.load(open(model_path, "rb"))
+        with open(metadata_path, "r") as f:
+            model_metadata = json.load(f)
+    else:
+        raise FileNotFoundError("Baseline model files not found")
+except Exception as e:
+    print(f"Model load failed: {e}. Attempting startup retraining...")
     model, _ = train_and_save_model(model_path=model_path, version="3.0.0")
     if os.path.exists(metadata_path):
         with open(metadata_path, "r") as f:
