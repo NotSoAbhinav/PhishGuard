@@ -1,0 +1,32 @@
+name: Sync main → model-sync
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync-model-sync:
+    runs-on: ubuntu-latest
+    # Skip if the commit message contains [skip ci] (auto-sync commits)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge main into model-sync
+        run: |
+          git checkout model-sync
+          git merge main --no-edit -m "Auto-merge main into model-sync [skip ci]"
+          git push origin model-sync
