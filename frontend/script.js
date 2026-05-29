@@ -19,6 +19,8 @@ let sessionCounts = { safe: 0, phishing: 0 };
 let threatChartInstance = null;
 let isInspectorExpanded = false;
 let currentFilter = "all";
+let isColdStartActive = false;
+let coldStartInterval = null;
 
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
@@ -88,6 +90,17 @@ async function verifyApiHealth() {
       statusIndicator.querySelector(".status-text").innerText = "API Online";
       modelVerBadge.innerText = `v${data.model_version}`;
       
+      // Dismiss the cold start modal if active
+      const modal = document.getElementById("coldStartModal");
+      if (modal && !modal.classList.contains("hidden")) {
+        modal.classList.add("hidden");
+      }
+      if (coldStartInterval) {
+        clearInterval(coldStartInterval);
+        coldStartInterval = null;
+        isColdStartActive = false;
+      }
+
       // Load general statistics and history feed
       fetchGlobalStats();
       fetchHistory();
@@ -98,8 +111,90 @@ async function verifyApiHealth() {
     console.error("API Connection Error:", error);
     statusIndicator.className = "status-indicator offline";
     statusIndicator.querySelector(".status-text").innerText = "API Offline (Cold Start)";
-    showToast("API server is offline or spinning up. Please wait...", "⚠️", 5000);
+    
+    // Start cold start countdown
+    startColdStartCountdown();
   }
+}
+
+// 2a. Cold Start Countdown & Background Polling
+function startColdStartCountdown() {
+  if (isColdStartActive) return;
+  isColdStartActive = true;
+
+  const modal = document.getElementById("coldStartModal");
+  const countdownText = document.getElementById("coldStartCountdown");
+  const progressBar = document.getElementById("coldStartProgressBar");
+
+  if (modal) modal.classList.remove("hidden");
+  
+  let elapsed = 0;
+  const duration = 50; // Render free tier container boots in ~50 seconds
+
+  if (countdownText) countdownText.innerText = `${duration}s`;
+  if (progressBar) progressBar.style.width = "0%";
+
+  if (coldStartInterval) clearInterval(coldStartInterval);
+
+  coldStartInterval = setInterval(async () => {
+    elapsed++;
+    const remaining = Math.max(0, duration - elapsed);
+
+    if (countdownText) {
+      if (remaining > 0) {
+        countdownText.innerText = `${remaining}s`;
+      } else {
+        countdownText.innerText = "Connecting...";
+      }
+    }
+
+    if (progressBar) {
+      const percentage = Math.min(100, (elapsed / duration) * 100);
+      progressBar.style.width = `${percentage}%`;
+    }
+
+    // Every 5 seconds (or when timer hits 0), check if the server is back online
+    if (elapsed % 5 === 0 || remaining === 0) {
+      try {
+        const checkRes = await fetch(`${API_BASE}/`, {
+          method: "GET",
+          headers: { "X-API-Key": API_KEY }
+        });
+
+        if (checkRes.ok) {
+          // Success! API is awake
+          clearInterval(coldStartInterval);
+          coldStartInterval = null;
+          isColdStartActive = false;
+
+          if (modal) modal.classList.add("hidden");
+
+          const statusIndicator = document.getElementById("statusIndicator");
+          if (statusIndicator) {
+            statusIndicator.className = "status-indicator online";
+            statusIndicator.querySelector(".status-text").innerText = "API Online";
+          }
+
+          // Reload all components
+          const data = await checkRes.json();
+          const modelVerBadge = document.getElementById("modelVerBadge");
+          if (modelVerBadge) modelVerBadge.innerText = `v${data.model_version}`;
+
+          fetchGlobalStats();
+          fetchHistory();
+
+          showToast("API Server is awake! Connected successfully.", "⚡", 4000);
+        }
+      } catch (err) {
+        console.log("Still waiting for API wake-up...");
+      }
+    }
+
+    // If it's taking unusually long (e.g., over 90 seconds)
+    if (elapsed > 90) {
+      if (countdownText) countdownText.innerText = "Waking up...";
+    }
+  }, 1000);
 }
 
 // 3. Fetch Global Stats

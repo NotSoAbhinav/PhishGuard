@@ -1454,6 +1454,16 @@ body::before {
   100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
 }
 
+@keyframes pulseOpacity {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0% { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.2)); }
+  100% { filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.7)); }
+}
+
 .hidden {
   display: none !important;
 }
