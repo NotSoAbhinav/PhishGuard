@@ -1464,6 +1464,15 @@ body::before {
   100% { filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.7)); }
 }
 
+.loader-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 130, 246, 0.08);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
 .hidden {
   display: none !important;
 }
