@@ -18,17 +18,22 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- INITIALIZATION LOADING SCREEN -->
+  <!-- INITIALIZATION LOADING SCREEN (TERMINAL THEMED) -->
   <div id="apiLoaderScreen" class="modal-overlay">
-    <div class="modal card" style="max-width: 400px; text-align: center; padding: 30px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; border: 1px solid var(--border-color);">
-      <div style="font-size: 24px; font-weight: 800; background: linear-gradient(90deg, var(--text-primary), var(--text-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 26px; animation: pulseGlow 1.5s ease-in-out infinite alternate;">🔐</span> 
-        PhishGuard
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <div class="terminal-buttons">
+          <span class="t-btn red"></span>
+          <span class="t-btn yellow"></span>
+          <span class="t-btn green"></span>
+        </div>
+        <div class="terminal-title">bash - phishguard-init.sh</div>
       </div>
-      <p style="padding: 0; color: var(--text-secondary); font-size: 13px; margin: 0; line-height: 1.5;">
-        Connecting to Secure Threat Intelligence API...
-      </p>
-      <div class="loader-spinner"></div>
+      <div class="terminal-body" id="terminalBody">
+        <div class="terminal-line prompt"><span class="t-prompt">$</span> ./phishguard-init.sh</div>
+        <div class="terminal-line text-info">[SYS] Booting PhishGuard Threat Auditor v3.5.0...</div>
+        <div class="terminal-line" id="termLineConnecting">[SYS] Establishing API handshake...</div>
+      </div>
     </div>
   </div>
 
@@ -376,36 +381,7 @@
       </div>
     </div>
 
-    <!-- COLD START COUNTDOWN MODAL -->
-    <div id="coldStartModal" class="modal-overlay hidden">
-      <div class="modal card" style="max-width: 420px; text-align: center; padding: 10px 0 20px 0;">
-        <div class="modal-header" style="justify-content: center; border-bottom: none; padding-bottom: 5px;">
-          <h3 style="font-size: 18px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 20px; animation: pulseGlow 1.5s ease-in-out infinite alternate;">⚡</span> 
-            API Cold Start
-          </h3>
-        </div>
-        <p style="padding: 5px 24px 15px 24px; text-align: center; color: var(--text-secondary); font-size: 13px; line-height: 1.5;">
-          Render's free-tier container is waking up from its inactive sleep. This usually takes about 50 seconds. Please wait while the environment initializes.
-        </p>
-        
-        <!-- Timer UI -->
-        <div style="margin: 0 24px 15px 24px; padding: 16px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px;">
-            <span style="color: var(--text-secondary); font-weight: 500;">Boot Estimate:</span>
-            <span id="coldStartCountdown" style="font-weight: 700; color: var(--warning); font-family: var(--font-mono); font-size: 14px;">50s</span>
-          </div>
-          <div class="progress-bar-bg" style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; overflow: hidden; position: relative;">
-            <div id="coldStartProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--warning), var(--primary)); border-radius: 4px; transition: width 0.2s ease;"></div>
-          </div>
-        </div>
-        
-        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 11px; color: var(--text-muted);">
-          <span class="status-dot" style="background-color: var(--warning); display: inline-block; width: 6px; height: 6px; border-radius: 50%; animation: pulseOpacity 1s ease-in-out infinite alternate;"></span>
-          <span>Connecting to web service...</span>
-        </div>
-      </div>
-    </div>
+
 
   </div>
   
