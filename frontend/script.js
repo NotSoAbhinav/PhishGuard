@@ -1,4 +1,4 @@
-// PhishGuard SaaS Analytics & ML Controller
+// PhishGuard Analytics & ML Controller
 
 // API Base and Key placeholders (replaced during build via replace_api_url.py)
 let API_BASE = "__API_BASE__";
@@ -57,7 +57,7 @@ async function verifyApiHealth() {
   }
 }
 
-// 3. Fetch Global SaaS Stats
+// 3. Fetch Global Stats
 async function fetchGlobalStats() {
   try {
     const res = await fetch(`${API_BASE}/stats`, {

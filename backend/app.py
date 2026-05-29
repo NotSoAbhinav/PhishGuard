@@ -72,7 +72,7 @@ def is_valid_url(url):
 def home():
     return jsonify({
         "status": "online",
-        "message": "PhishGuard SaaS API is running.",
+        "message": "PhishGuard API is running.",
         "model_features": 24,
         "model_version": model_metadata.get("version", "3.0.0")
     })
