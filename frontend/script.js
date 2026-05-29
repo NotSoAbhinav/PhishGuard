@@ -90,6 +90,10 @@ async function verifyApiHealth() {
       statusIndicator.querySelector(".status-text").innerText = "API Online";
       modelVerBadge.innerText = `v${data.model_version}`;
       
+      // Dismiss the initial loading screen
+      const loader = document.getElementById("apiLoaderScreen");
+      if (loader) loader.classList.add("hidden");
+
       // Dismiss the cold start modal if active
       const modal = document.getElementById("coldStartModal");
       if (modal && !modal.classList.contains("hidden")) {
@@ -112,6 +116,10 @@ async function verifyApiHealth() {
     statusIndicator.className = "status-indicator offline";
     statusIndicator.querySelector(".status-text").innerText = "API Offline (Cold Start)";
     
+    // Dismiss the initial loading screen
+    const loader = document.getElementById("apiLoaderScreen");
+    if (loader) loader.classList.add("hidden");
+
     // Start cold start countdown
     startColdStartCountdown();
   }
@@ -166,6 +174,9 @@ function startColdStartCountdown() {
           clearInterval(coldStartInterval);
           coldStartInterval = null;
           isColdStartActive = false;
+
+          const loader = document.getElementById("apiLoaderScreen");
+          if (loader) loader.classList.add("hidden");
 
           if (modal) modal.classList.add("hidden");
 
