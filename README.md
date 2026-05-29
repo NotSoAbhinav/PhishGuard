@@ -101,5 +101,3 @@ PhishGuard is deployed in a split-free cloud architecture:
 
 1. **Backend (Render Web Service)**: Runs the Python environment and Gunicorn to host the Flask REST API.
 2. **Frontend (Vercel)**: Serves the static HTML/CSS/JS files. During Vercel's build phase, it runs `replace_api_url.py` to securely replace credentials placeholders in `script.js` with environment variables.
-
-For detailed, step-by-step production hosting guidelines, refer to the [walkthrough.md](walkthrough.md) file.
