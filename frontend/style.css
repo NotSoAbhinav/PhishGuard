@@ -59,6 +59,26 @@ body {
   overflow-x: hidden;
 }
 
+/* Global Cyber Scan Line Sweep */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), rgba(6, 182, 212, 0.4), transparent);
+  opacity: 0.25;
+  z-index: 1000;
+  pointer-events: none;
+  animation: globalSweep 8s linear infinite;
+}
+
+@keyframes globalSweep {
+  0% { top: -2%; }
+  100% { top: 102%; }
+}
+
 /* CONTAINER */
 .app-container {
   width: 100%;
@@ -596,6 +616,49 @@ body {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+  position: relative;
+  z-index: 2;
+}
+
+.radial-gauge::after {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--gauge-glow, rgba(59, 130, 246, 0.12)) 0%, transparent 70%);
+  z-index: 1;
+  pointer-events: none;
+  transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: gaugeAuraPulse 3s ease-in-out infinite alternate;
+}
+
+/* Conic Radar Sweep Overlay */
+.radar-sweep {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 40%, rgba(var(--radar-color-rgb, 59, 130, 246), 0.06) 70%, rgba(var(--radar-color-rgb, 59, 130, 246), 0.16) 100%);
+  z-index: 1;
+  pointer-events: none;
+  animation: radarSweep 5s linear infinite;
+  border: 1px solid rgba(255, 255, 255, 0.015);
+  box-sizing: border-box;
+}
+
+@keyframes radarSweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes gaugeAuraPulse {
+  0% { opacity: 0.75; transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1.03); }
 }
 
 .gauge-bg {
@@ -633,6 +696,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  z-index: 3;
 }
 
 .gauge-percentage {
@@ -1304,6 +1368,90 @@ body {
 @keyframes logoPulse {
   0% { transform: scale(1); filter: drop-shadow(0 0 4px var(--primary-glow)); }
   100% { transform: scale(1.08); filter: drop-shadow(0 0 10px var(--primary)); }
+}
+
+/* Table Status Badges Pulse */
+/* History Section Controls & Filters */
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-filters {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  padding: 2px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.filter-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.filter-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.filter-btn.active {
+  color: white;
+  background: var(--primary);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.clear-history-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.clear-history-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
+}
+
+.clear-history-btn:hover {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+  transform: translateY(-0.5px);
+}
+
+/* Feature Status Badges Pulse & Animations */
+.status-badge.status-badge-Critical {
+  animation: badgeDangerGlow 1.5s ease-in-out infinite alternate;
+}
+.status-badge.status-badge-Warning {
+  animation: badgeWarningGlow 1.5s ease-in-out infinite alternate;
+}
+@keyframes badgeDangerGlow {
+  0% { box-shadow: 0 0 2px rgba(239, 68, 68, 0.2); }
+  100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+}
+@keyframes badgeWarningGlow {
+  0% { box-shadow: 0 0 2px rgba(245, 158, 11, 0.2); }
+  100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
 }
 
 .hidden {

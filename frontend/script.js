@@ -18,6 +18,7 @@ let sensitivityThreshold = 50;
 let sessionCounts = { safe: 0, phishing: 0 };
 let threatChartInstance = null;
 let isInspectorExpanded = false;
+let currentFilter = "all";
 
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
@@ -25,6 +26,50 @@ document.addEventListener("DOMContentLoaded", () => {
   verifyApiHealth();
   updateThresholdDisplay(50);
 });
+
+// Helper: Animate numbers counting up
+function animateValue(id, start, end, duration, suffix = "") {
+  const obj = document.getElementById(id);
+  if (!obj) return;
+  
+  const startNum = parseFloat(start);
+  const endNum = parseFloat(end);
+  if (isNaN(startNum) || isNaN(endNum)) {
+    obj.innerText = end + suffix;
+    return;
+  }
+  
+  const hasDecimal = id === "statAccuracy" || end.toString().includes(".");
+  let startTimestamp = null;
+  
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp;
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+    const val = progress * (2 - progress); // easeOutQuad
+    const current = startNum + val * (endNum - startNum);
+    
+    obj.innerText = (hasDecimal ? current.toFixed(1) : Math.floor(current)) + suffix;
+    
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  };
+  window.requestAnimationFrame(step);
+}
+
+// Helper: Update the sync queue progress badge
+function updatePendingFeedbackUI(count, threshold) {
+  const badge = document.getElementById("syncStatusBadge");
+  const numText = document.getElementById("syncQueueNumber");
+  if (!badge || !numText) return;
+  
+  if (count !== undefined && count > 0) {
+    numText.innerText = `${count}/${threshold}`;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
 
 // 2. Verify API Health and Fetch Version / Metrics
 async function verifyApiHealth() {
@@ -70,11 +115,28 @@ async function fetchGlobalStats() {
 
     if (res.ok) {
       const stats = await res.json();
-      document.getElementById("statTotalScans").innerText = stats.total_scans;
-      document.getElementById("statThreatRate").innerText = `${stats.threat_rate}%`;
-      document.getElementById("statCacheHits").innerText = `${stats.cache_hit_rate}%`;
-      document.getElementById("statAccuracy").innerText = `${stats.cv_accuracy}%`;
+      
+      // Animate statistics counters
+      const totalScansElem = document.getElementById("statTotalScans");
+      const currentTotal = parseInt(totalScansElem.innerText) || 0;
+      animateValue("statTotalScans", currentTotal, stats.total_scans, 1000);
+      
+      const threatRateElem = document.getElementById("statThreatRate");
+      const currentThreat = parseFloat(threatRateElem.innerText) || 0;
+      animateValue("statThreatRate", currentThreat, stats.threat_rate, 1000, "%");
+      
+      const cacheHitsElem = document.getElementById("statCacheHits");
+      const currentCache = parseFloat(cacheHitsElem.innerText) || 0;
+      animateValue("statCacheHits", currentCache, stats.cache_hit_rate, 1000, "%");
+      
+      const accuracyElem = document.getElementById("statAccuracy");
+      const currentAccuracy = parseFloat(accuracyElem.innerText) || 0;
+      animateValue("statAccuracy", currentAccuracy, stats.cv_accuracy, 1000, "%");
+      
       document.getElementById("modelVerBadge").innerText = `v${stats.model_version}`;
+      
+      // Update sync queue badge status
+      updatePendingFeedbackUI(stats.pending_feedback_count, stats.github_sync_threshold);
     }
   } catch (err) {
     console.error("Failed to load global statistics:", err);
@@ -178,6 +240,13 @@ async function analyzeURL() {
     gaugePlaceholder.classList.add("hidden");
     gaugeSection.classList.remove("hidden");
     radialGauge.classList.add("scanning");
+    radialGauge.style.setProperty("--gauge-glow", "rgba(59, 130, 246, 0.2)");
+    
+    const sweep = document.getElementById("radarSweep");
+    if (sweep) {
+      sweep.style.setProperty("--radar-color-rgb", "59, 130, 246");
+    }
+    
     riskPercent.innerText = "---";
     riskLevel.innerText = "AUDITING";
     riskLevel.style.color = "var(--primary)";
@@ -295,6 +364,18 @@ function renderScanResult() {
     badgeText.innerText = "Safe Link";
   }
 
+  // Set radar sweep color variable based on threat level
+  const sweep = document.getElementById("radarSweep");
+  if (sweep) {
+    let rgb = "16, 185, 129"; // Green
+    if (classification === "phishing") {
+      rgb = "239, 68, 68"; // Red
+    } else if (score > sensitivityThreshold - 15) {
+      rgb = "245, 158, 11"; // Orange
+    }
+    sweep.style.setProperty("--radar-color-rgb", rgb);
+  }
+
   // Set AI Confidence level
   confidenceVal.innerText = currentScan.confidence;
   confidenceVal.className = currentScan.confidence.toLowerCase();
@@ -308,9 +389,21 @@ function renderScanResult() {
 
 function riskMeterColor(colorCode) {
   const gaugeMeter = document.getElementById("gaugeMeter");
-  gaugeMeter.style.stroke = colorCode;
-  // Apply visual shadow filter dynamically
-  gaugeMeter.style.filter = `drop-shadow(0 0 6px ${colorCode})`;
+  const radialGauge = document.querySelector(".radial-gauge");
+
+  if (gaugeMeter) {
+    gaugeMeter.style.stroke = colorCode;
+    gaugeMeter.style.filter = `drop-shadow(0 0 6px ${colorCode})`;
+  }
+
+  if (radialGauge) {
+    let glowColor = colorCode;
+    if (colorCode === "#ef4444") glowColor = "rgba(239, 68, 68, 0.18)";      // Red
+    else if (colorCode === "#f59e0b") glowColor = "rgba(245, 158, 11, 0.18)"; // Orange
+    else if (colorCode === "#10b981") glowColor = "rgba(16, 185, 129, 0.18)";  // Green
+    
+    radialGauge.style.setProperty("--gauge-glow", glowColor);
+  }
 }
 
 // 7. Update Threshold Display and Trigger Recalculation
@@ -356,7 +449,7 @@ function populateHeuristics(reasons, classification) {
 
   if (!reasons || reasons.length === 0) {
     container.innerHTML = `
-      <div class="insight-card info">
+      <div class="insight-card insight-info">
         <span class="insight-icon">ℹ️</span>
         <div class="insight-details">
           <h4>No Threats Found</h4>
@@ -370,7 +463,7 @@ function populateHeuristics(reasons, classification) {
   reasons.forEach(reason => {
     const severity = reason.severity.toLowerCase(); // critical, warning, info
     const div = document.createElement("div");
-    div.className = `insight-card ${severity}`;
+    div.className = `insight-card insight-${severity}`;
 
     let icon = "ℹ️";
     if (severity === "critical") icon = "🚨";
@@ -400,15 +493,15 @@ function populateFeaturesTable(breakdown) {
   breakdown.forEach(feature => {
     const row = document.createElement("tr");
 
-    let statusClass = "badge-safe";
-    if (feature.status === "Critical") statusClass = "badge-danger";
-    else if (feature.status === "Warning") statusClass = "badge-warning";
-    else if (feature.status === "Info") statusClass = "badge-info";
+    let statusClass = "status-badge-Safe";
+    if (feature.status === "Critical") statusClass = "status-badge-Critical";
+    else if (feature.status === "Warning") statusClass = "status-badge-Warning";
+    else if (feature.status === "Info") statusClass = "status-badge-Info";
 
     row.innerHTML = `
       <td>${feature.name}</td>
       <td class="raw-value">${feature.value}</td>
-      <td><span class="table-badge ${statusClass}">${feature.status}</span></td>
+      <td><span class="status-badge ${statusClass}">${feature.status}</span></td>
     `;
     tableBody.appendChild(row);
   });
@@ -523,19 +616,26 @@ function renderHistoryList() {
   const countBadge = document.getElementById("historyCount");
 
   list.innerHTML = "";
-  countBadge.innerText = `${sessionHistory.length} Scans Cached`;
 
-  if (sessionHistory.length === 0) {
-    list.innerHTML = `<div class="history-empty">No URLs analyzed in this session yet.</div>`;
+  // Apply search filtering
+  const filteredHistory = sessionHistory.filter(item => {
+    if (currentFilter === "all") return true;
+    return item.result === currentFilter;
+  });
+
+  countBadge.innerText = `${filteredHistory.length} Scans`;
+
+  if (filteredHistory.length === 0) {
+    list.innerHTML = `<div class="history-empty">No matching scans found.</div>`;
     return;
   }
 
-  sessionHistory.forEach(item => {
+  filteredHistory.forEach(item => {
     const div = document.createElement("div");
     div.className = "history-item";
 
     const isPhish = item.result === "phishing";
-    const statusClass = isPhish ? "danger" : "success";
+    const statusClass = isPhish ? "badge-danger" : "badge-safe";
     const statusText = isPhish ? "Phishing" : "Safe";
 
     // Hostname extract
@@ -545,13 +645,16 @@ function renderHistoryList() {
     } catch(e) {}
 
     div.innerHTML = `
-      <div class="history-info">
-        <span class="history-url" title="${item.url}">${host}</span>
-        <span class="history-time">${item.timestamp}</span>
+      <div class="history-item-left">
+        <span class="history-item-url" title="${item.url}">${host}</span>
+        <span class="history-item-time">${item.timestamp}</span>
       </div>
-      <div class="history-badge-area">
-        <span class="history-badge ${statusClass}">${statusText}</span>
-        <span class="history-score">${item.risk_score}%</span>
+      <div class="history-item-right">
+        <span class="history-risk-badge ${statusClass}">${statusText}</span>
+        <span class="history-score" style="font-family: var(--font-mono); font-weight: 700; color: ${isPhish ? 'var(--danger)' : 'var(--safe)'};">${item.risk_score}%</span>
+        <svg class="history-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
       </div>
     `;
 
@@ -563,6 +666,41 @@ function renderHistoryList() {
 
     list.appendChild(div);
   });
+}
+
+function filterHistory(filterType) {
+  currentFilter = filterType;
+  
+  // Toggle active button states
+  document.getElementById("filterAll").classList.toggle("active", filterType === "all");
+  document.getElementById("filterThreats").classList.toggle("active", filterType === "phishing");
+  document.getElementById("filterSafe").classList.toggle("active", filterType === "safe");
+  
+  renderHistoryList();
+}
+
+async function clearHistoryFeed() {
+  if (!confirm("Are you sure you want to clear the recent scan feed? This will flush the cache from the server.")) return;
+  
+  try {
+    const res = await fetch(`${API_BASE}/history/clear`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (res.ok) {
+      showToast("Scan feed cleared successfully", "🗑️");
+      fetchHistory(); // Reload history (should flush the list)
+    } else {
+      throw new Error("Failed to clear feed");
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Failed to clear scan history", "❌");
+  }
 }
 
 // 13. Custom Slide-in Toast Banner Notification

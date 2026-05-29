@@ -38,6 +38,10 @@
           <span class="version-title">Model Version:</span>
           <span class="version-number" id="modelVerBadge">v2.0.0</span>
         </div>
+        <div class="version-badge hidden" id="syncStatusBadge">
+          <span class="version-title">Sync Queue:</span>
+          <span class="version-number" id="syncQueueNumber" style="color: var(--warning); filter: drop-shadow(0 0 4px rgba(245,158,11,0.2));">0/50</span>
+        </div>
         <div class="status-indicator" id="statusIndicator">
           <span class="status-dot"></span>
           <span class="status-text">Checking API...</span>
@@ -182,6 +186,7 @@
 
           <div class="gauge-container hidden" id="gaugeSection">
             <div class="radial-gauge">
+              <div class="radar-sweep" id="radarSweep"></div>
               <svg viewBox="0 0 120 120">
                 <circle class="gauge-bg" cx="60" cy="60" r="50" fill="none" stroke-width="8"></circle>
                 <circle class="gauge-meter" id="gaugeMeter" cx="60" cy="60" r="50" fill="none" stroke-width="8" stroke-dasharray="314.16" stroke-dashoffset="314.16"></circle>
@@ -309,7 +314,20 @@
           </svg>
           <h2>Recent Scan Feed</h2>
         </div>
-        <span class="history-count" id="historyCount">0 Scans Cached</span>
+        <div class="history-controls">
+          <div class="history-filters">
+            <button class="filter-btn active" onclick="filterHistory('all')" id="filterAll">All</button>
+            <button class="filter-btn" onclick="filterHistory('phishing')" id="filterThreats">Threats</button>
+            <button class="filter-btn" onclick="filterHistory('safe')" id="filterSafe">Safe</button>
+          </div>
+          <span class="history-count" id="historyCount">0 Scans</span>
+          <button class="clear-history-btn" onclick="clearHistoryFeed()" title="Clear Recent Feed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="history-list" id="historyList">
         <div class="history-empty">No URLs analyzed in this session yet.</div>

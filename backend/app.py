@@ -7,9 +7,12 @@ import csv
 import json
 from urllib.parse import urlparse
 from functools import wraps
+import base64
+import urllib.request
+import urllib.error
 
 from logger import log_result
-from history import add_history, get_history 
+from history import add_history, get_history, clear_history
 from cache import get_cached, set_cache, clear_cache
 from feature_extractor import extract_features
 from train_model import train_and_save_model
@@ -35,6 +38,73 @@ db_lock = threading.Lock()
 model_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(model_dir, "model.pkl")
 metadata_path = os.path.join(model_dir, "model_metadata.json")
+
+def push_to_github(file_path, github_repo, github_path, commit_message, pat):
+    """
+    Pushes a local file to a GitHub repository using the GitHub Contents API.
+    """
+    url = f"https://api.github.com/repos/{github_repo}/contents/{github_path}"
+    headers = {
+        "Authorization": f"token {pat}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "PhishGuard-App"
+    }
+    
+    # 1. Get file SHA if it exists
+    req = urllib.request.Request(url, headers=headers)
+    sha = None
+    try:
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode())
+            sha = res_data.get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code != 404: # 404 means file doesn't exist yet, which is fine
+            print(f"Error fetching file SHA from GitHub ({github_path}): {e.code} - {e.read().decode()}")
+            return False
+    except Exception as e:
+        print(f"Connection error fetching SHA from GitHub ({github_path}): {e}")
+        return False
+    
+    # 2. Base64 encode local file contents
+    try:
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+        encoded_content = base64.b64encode(file_content).decode('utf-8')
+    except Exception as e:
+        print(f"Error reading file to push ({file_path}): {e}")
+        return False
+    
+    # 3. Create payload
+    payload = {
+        "message": commit_message,
+        "content": encoded_content,
+        "branch": "main"
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    # 4. PUT request to update/create file
+    req_put = urllib.request.Request(
+        url, 
+        data=json.dumps(payload).encode('utf-8'), 
+        headers={**headers, "Content-Type": "application/json"},
+        method="PUT"
+    )
+    
+    try:
+        with urllib.request.urlopen(req_put) as response:
+            if response.status in [200, 201]:
+                print(f"Successfully pushed {github_path} to GitHub!")
+                return True
+            else:
+                print(f"Failed to push {github_path} to GitHub. Status: {response.status}")
+                return False
+    except urllib.error.HTTPError as e:
+        print(f"HTTP error pushing {github_path}: {e.code} - {e.read().decode()}")
+        return False
+    except Exception as e:
+        print(f"Connection error pushing {github_path}: {e}")
+        return False
 
 # In-memory SaaS statistics tracker
 stats = {
@@ -89,6 +159,19 @@ def stats_endpoint():
     total_requests = total + hits
     cache_rate = (hits / total_requests) if total_requests > 0 else 0.0
     
+    # Load pending feedback count
+    pending_count = 0
+    state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback_state.json")
+    if os.path.exists(state_path):
+        try:
+            with open(state_path, "r") as f:
+                state_data = json.load(f)
+                pending_count = state_data.get("pending_feedback_count", 0)
+        except Exception:
+            pass
+            
+    sync_threshold = int(os.environ.get("GITHUB_SYNC_THRESHOLD", 50))
+    
     return jsonify({
         "total_scans": total,
         "threats_detected": phish,
@@ -97,7 +180,9 @@ def stats_endpoint():
         "avg_risk_score": round(avg_risk, 1),
         "model_version": model_metadata.get("version", "3.0.0"),
         "trained_samples": model_metadata.get("samples_count", 200),
-        "cv_accuracy": round(model_metadata.get("cv_accuracy", 1.0) * 100, 2)
+        "cv_accuracy": round(model_metadata.get("cv_accuracy", 1.0) * 100, 2),
+        "pending_feedback_count": pending_count,
+        "github_sync_threshold": sync_threshold
     })
 
 @app.route("/analyze", methods=["POST"])
@@ -312,6 +397,32 @@ def feedback():
     except Exception as e:
         return jsonify({"error": f"Failed to save feedback: {str(e)}"}), 500
 
+    # Manage pending feedback batch counter
+    state_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback_state.json")
+    pending_count = 0
+    if os.path.exists(state_path):
+        try:
+            with open(state_path, "r") as f:
+                state_data = json.load(f)
+                pending_count = state_data.get("pending_feedback_count", 0)
+        except Exception:
+            pass
+            
+    pending_count += 1
+    
+    sync_threshold = int(os.environ.get("GITHUB_SYNC_THRESHOLD", 50))
+    should_push = False
+    
+    if pending_count >= sync_threshold:
+        should_push = True
+        pending_count = 0
+        
+    try:
+        with open(state_path, "w") as f:
+            json.dump({"pending_feedback_count": pending_count}, f)
+    except Exception as e:
+        print(f"Failed to save feedback state counter: {e}")
+
     # Determine incremented patch version (e.g. 3.0.0 -> 3.0.1)
     current_ver = model_metadata.get("version", "3.0.0")
     try:
@@ -325,7 +436,7 @@ def feedback():
         new_ver = "3.0.1"
 
     # Background retraining
-    def retrain_task(version_str):
+    def retrain_task(version_str, push_flag):
         global model, model_metadata
         try:
             print(f"Background retraining started. Target version: {version_str}...")
@@ -337,18 +448,46 @@ def feedback():
                     model_metadata = json.load(f)
             clear_cache()
             print(f"Model successfully evolved to version {version_str}.")
+            
+            # Sync to GitHub if threshold reached
+            if push_flag:
+                pat = os.environ.get("GITHUB_PAT")
+                repo = os.environ.get("GITHUB_REPO", "NotSoAbhinav/PhishGuard")
+                if pat:
+                    print(f"Pushing updated model and dataset to GitHub repository '{repo}'...")
+                    commit_msg = f"Auto-evolve model and sync dataset to v{version_str} [skip ci]"
+                    
+                    success1 = push_to_github(dataset_path, repo, "dataset/urls.csv", commit_msg, pat)
+                    success2 = push_to_github(metadata_path, repo, "backend/model_metadata.json", commit_msg, pat)
+                    success3 = push_to_github(model_path, repo, "backend/model.pkl", commit_msg, pat)
+                    
+                    if success1 and success2 and success3:
+                        print("GitHub Auto-Sync complete. All files pushed successfully.")
+                    else:
+                        print("GitHub Auto-Sync failed. See logs.")
+                else:
+                    print("WARNING: GITHUB_PAT env variable is not set. Skipping GitHub push sync.")
         except Exception as err:
             print(f"Error during background retraining: {err}")
 
-    threading.Thread(target=retrain_task, args=(new_ver,)).start()
+    threading.Thread(target=retrain_task, args=(new_ver, should_push)).start()
 
     return jsonify({
         "status": "success",
         "message": "Feedback recorded. Model is retraining in the background.",
         "target_version": new_ver,
         "url": url,
-        "label": label
+        "label": label,
+        "pending_feedback_count": pending_count,
+        "github_sync_threshold": sync_threshold,
+        "synced": should_push
     })
+
+@app.route("/history/clear", methods=["POST"])
+@require_api_key
+def clear_history_endpoint():
+    clear_history()
+    return jsonify({"status": "success", "message": "History cleared successfully."})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
