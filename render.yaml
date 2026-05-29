@@ -16,9 +16,11 @@ services:
     envVars:
       - key: PHISHGUARD_API_URL
         fromService:
+          type: web
           name: phishguard-api
-          value: url
+          envVarKey: RENDER_EXTERNAL_URL
       - key: PHISHGUARD_API_KEY
         fromService:
+          type: web
           name: phishguard-api
-          value: envVar/PHISHGUARD_API_KEY
+          envVarKey: PHISHGUARD_API_KEY
