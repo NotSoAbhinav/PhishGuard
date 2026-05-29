@@ -1,6 +1,7 @@
 # PhishGuard 🔐
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-https%3A%2F%2Fphish--guardx.vercel.app-10b981?style=for-the-badge&logo=vercel)](https://phish-guardx.vercel.app)
+[![Recruiter Guide](https://img.shields.io/badge/Recruiter%20Guide-System%20Design%20%26%20MLOps-blueviolet?style=for-the-badge&logo=github)](PROJECT_PRESENTATION_GUIDE.md)
 [![Python Version](https://img.shields.io/badge/Python-3.13.7-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 

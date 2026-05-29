@@ -1,100 +1,110 @@
-# PhishGuard Project Presentation Guide 🎓
+# PhishGuard: Technical Recruiter & Engineering Presentation Guide 🛡️
 
-This guide serves as a comprehensive preparation sheet for presenting PhishGuard as project. It outlines the architecture, data pipeline, Machine Learning choices, and answers to common defense questions from examiners.
-
----
-
-## 1. Project Overview & Pitch
-* **Title**: PhishGuard: Intelligent Real-Time Phishing Threat Intelligence Auditor
-* **Core Problem**: Traditional security filters rely heavily on static blacklists (e.g., Google Safe Browsing). They fail to catch **zero-day phishing domains** generated dynamically.
-* **The Solution**: PhishGuard uses a **Random Forest Classifier** trained on 24 lexical and structural features of a URL. It evaluates risk in milliseconds and features a **user feedback self-retraining loop** that automatically adapts the model over time.
-* **Architecture Style**: Decoupled SaaS-Dashboard architecture.
-  * **Backend**: Flask API (Python) deployed on Render (free tier).
-  * **Frontend**: Vanilla HTML5/CSS3/JS Web App deployed on Vercel.
+Welcome to **PhishGuard**, an intelligent, real-time phishing threat auditor. This document is designed for technical recruiters, hiring managers, and system architects. It highlights the engineering decisions, system design patterns, and machine learning pipeline that make PhishGuard a highly efficient, production-ready security tool.
 
 ---
 
-## 2. System Architecture Workflow
+## 🚀 Executive Summary
+* **Problem**: Traditional phishing filters rely on static blacklists (e.g., Google Safe Browsing), which fail to block zero-day phishing subdomains generated dynamically by attackers.
+* **Solution**: An AI-powered threat auditor utilizing a **Random Forest Classifier** trained on 24 lexical, structural, and heuristic URL features. 
+* **Key Innovation**: A stateless, self-retraining MLOps feedback loop that evolves the model automatically in production based on user corrections—operating 100% free on cloud tiers.
+* **Core Metrics**:
+  * **Inference Latency**: `< 5ms` per URL scan.
+  * **Model Evaluation**: **99.5% Accuracy** via Stratified 5-Fold Cross-Validation.
+  * **Retraining Cost**: `$0.00` (utilizing a stateless Git-backed database architecture).
+
+---
+
+## 🎨 Tech Stack
+* **Backend**: Python 3.13, Flask, Scikit-learn, Pandas, Gunicorn.
+* **Frontend**: Vanilla HTML5, CSS3, JavaScript (ES6+), Chart.js (Real-time analytics).
+* **CI/CD & DevOps**: GitHub Actions, Vercel (static web hosting), Render (WSGI API hosting).
+
+---
+
+## 📐 System Architecture & MLOps Pipeline
 
 ```mermaid
 graph TD
-    User([User / Client Browser]) -->|1. Inputs URL| UI[Vercel Frontend]
-    UI -->|2. HTTP POST Request with API Key| API[Render Flask Backend]
+    User([User / Browser]) -->|1. Scans URL| UI[Vercel Frontend]
+    UI -->|2. Secure HTTP POST| API[Render Flask Backend]
     
-    subgraph Backend [Flask API Service]
+    subgraph Compute [Stateless Backend Web Service]
         API -->|3. Check cache| Cache{In-Memory Cache}
         Cache -->|Hit| ResCached[Return Cached Result]
         Cache -->|Miss| FE[Feature Extractor]
         
-        FE -->|4. Compiles 24 Features| Vector[Numeric Feature Vector]
+        FE -->|4. Extracts 24 Features| Vector[Numeric Feature Vector]
         Vector -->|5. Predict Probability| RF[Random Forest Model]
-        RF -->|6. Calculate Score & Audit| Rules[Rule-Based Heuristic Auditor]
+        RF -->|6. Heuristic Audit| Rules[Rule-Based Auditor]
     end
     
     Rules -->|7. JSON Payload| UI
-    UI -->|8. Visualizes Threats & Gauges| User
+    UI -->|8. Renders Dashboard & Gauges| User
     
     User -->|9. Submits Correction Feedback| API
-    API -->|10. Appends to dataset/urls.csv| Disk[(Local Disk)]
-    API -->|11. Triggers Retraining thread| Train[Train Model & Update version]
+    API -->|10. Appends to dataset/urls.csv| LocalFile[(Local Temp File)]
     
-    Train -->|12. Syncs Immediately| Push[GitHub Contents API Sync]
-    Push -->|13. Commits to model-sync branch| Git[(GitHub Repo model-sync branch)]
+    API -->|11. Async Sync Task| BackgroundTask[GitHub API Controller]
+    BackgroundTask -->|12. Push dataset| GitStorage[(GitHub model-sync Branch)]
+    
+    BackgroundTask -->|13. Retrain model if Queue = 10| Train[Random Forest Retraining]
+    Train -->|14. Hot Swap in RAM| RAM[Update Memory Instance]
+    Train -->|15. Push updated model weights| GitStorage
+    
+    style UI fill:#3b82f6,stroke:#fff,color:#fff
+    style Compute fill:#0f172a,stroke:#3b82f6,color:#fff
+    style GitStorage fill:#f59e0b,stroke:#fff,color:#fff
 ```
 
 ---
 
-## 3. The 24-Feature ML Pipeline
-When an examiner asks, *"How does your AI know if a link is fake?"*, you explain that PhishGuard extracts **24 characteristics** from the raw string. These are grouped into three categories:
+## 💡 Key Engineering Challenges & Solutions
 
-| Feature Name | Category | Description |
-| :--- | :--- | :--- |
-| **URL Length** | Lexical | Longer URLs are often used to hide malicious subdomains. |
-| **Domain Length** | Lexical | Phishing domains tend to have longer hostname lengths. |
-| **Path Length** | Lexical | Malicious URLs often have complex subdirectory structures. |
-| **Dots Count** | Lexical | High number of dots indicates deep subdomain nesting. |
-| **Hyphens in URL/Domain** | Lexical | Phishing links use dashes (e.g., `secure-paypal-login`) to look real. |
-| **Subdomain Count** | Lexical | Evaluates the depth of subdomains. |
-| **HTTPS Scheme** | Connection | Malicious URLs sometimes bypass SSL, or conversely, abuse free SSL. |
-| **IP Address Presence** | Structural | True if the URL host is a raw IP (e.g. `http://192.168.1.1`). |
-| **@ Symbol** | Structural | The `@` symbol ignores everything before it (e.g. `google.com@phish.com` goes to phish). |
-| **Double Slash Path** | Structural | Presence of `//` in the path indicating redirect tricks. |
-| **URL Shortener** | Structural | Uses tinyurl, bit.ly, etc., to obfuscate the destination. |
-| **Non-Standard Port** | Structural | Uses ports other than 80/443 (e.g., `8080`, `21`). |
-| **Suspicious TLD** | Domain | Uses low-cost TLDs (e.g., `.xyz`, `.fit`, `.cc`, `.tk`). |
-| **Digit Ratio** | Lexical | Ratio of numbers in the URL (high numbers indicate random generation). |
-| **Brand Spoofing** | Heuristic | Looks for brand keywords (e.g., `paypal`, `netflix`) outside official hostnames. |
-| **Shannon Entropy** | Complexity | Measures random text complexity (high entropy indicates machine-generated domains). |
-| **Vowel Ratio** | Lexical | Natural language words have balanced vowel ratios. Phishing domains don't. |
-| **Host Keyword** | Heuristic | Domain hostname contains words like `secure`, `webscr`, `login`, `bank`. |
-| **Consecutive Characters** | Complexity | Too many consecutive repeating symbols or dashes. |
-| **Typosquatting** | Heuristic | Visual similarity checks (e.g., `paypa1`, `go0gle`). |
-| **Domain Digit Count** | Lexical | Absolute count of digits inside the hostname. |
-| **Query Parameters** | Lexical | Number of query variables in the search string. |
-| **Consecutive Repeating Letters** | Complexity | Looks for visual duplication tricks. |
+### 1. Bypassing Ephemeral Disk Constraints on Free Cloud Hosting (Render)
+* **The Challenge**: Render’s free web services run on a stateless container with an ephemeral disk. Every 15 minutes of inactivity, the container spins down, and once it boots back up, any locally saved model weights or newly submitted dataset rows are permanently wiped.
+* **The Solution**: 
+  1. We separated our git repo into a **Code Branch (`main`)** and a **Data/Model Branch (`model-sync`)**.
+  2. Whenever a user submits feedback, the backend appends it to `urls.csv` and asynchronously pushes it to the `model-sync` branch on GitHub using the Contents API.
+  3. **On Startup Synchronization**: Every time the container boots up or wakes from sleep, the Flask app automatically queries GitHub and downloads the latest `urls.csv`, `model.pkl`, and `model_metadata.json` from the `model-sync` branch before accepting traffic.
+  4. This provides **100% data persistence and model evolution** on a zero-budget infrastructure.
+
+### 2. Eliminating Redundant Deployment Rebuild Loops
+* **The Challenge**: In a naive implementation, pushing updated models to GitHub would trigger Render to rebuild and redeploy the service, knocking the API offline for 2 minutes on every user feedback submission.
+* **The Solution**:
+  * We set Render's deployment branch to watch `main` (only code changes).
+  * The backend pushes database backups and model updates to the separate `model-sync` branch.
+  * Since Render is not watching `model-sync`, **these data pushes never trigger redeployments**. The live app stays 100% online, maintains its in-memory metrics, and updates its active classification weights seamlessly in RAM.
+
+### 3. Mitigating Ephemeral Cold Start Delay (Premium UX)
+* **The Challenge**: Render's free tier sleeps after 15 minutes, causing a 50–60 second delay on the first connection.
+* **The Solution**: Added an interactive **Hacker Terminal Boot Sequence** on the Vercel frontend. When it detects a cold start, it displays a retro terminal loading log and a textual progress bar (`[#####..........] 30%`). It polls the backend silently in the background, smoothly transitioning to the dashboard the instant a connection is established.
 
 ---
 
-## 4. Machine Learning Model details
-* **Algorithm**: Random Forest Classifier
-* **Why Random Forest?**
-  * It is an ensemble method combining multiple Decision Trees (default 150).
-  * High accuracy on tabular/numeric features, prevents overfitting using bootstrap bagging, and executes predictions in **under 5 milliseconds**, making it optimal for real-time gateway blocking.
-* **Validation Strategy**: **Stratified 5-Fold Cross-Validation**
-  * Ensures every fold has the same percentage of safe and phishing samples, guaranteeing that cross-validation accuracy (currently **99.5%**) is reliable and not biased by imbalanced classes.
+## 🧠 Machine Learning Engine
+
+### Why Random Forest over Deep Learning?
+While CNNs or LSTMs are common for text classification, they introduce significant latency, require heavy GPU resources, and cannot easily be retrained on the fly. 
+* **Speed**: Random Forest makes binary classification decisions in **`< 5ms`**, satisfying real-time gateway security requirements.
+* **Resource Friendly**: It runs on standard low-power CPU instances.
+* **Online Retraining**: Re-fitting the ensemble tree model on our feedback database takes less than **3 seconds** in a background thread, enabling live hot-swapping in production.
+
+### The 24-Feature Vector Pipeline
+PhishGuard extracts lexical, structural, and complexity markers from raw URL strings. Examples include:
+* **Lexical**: URL Length, Subdomain Count, Dots Count, Digit Ratios, Shannon Entropy (measures domain text complexity).
+* **Structural**: IP Address hosts, suspicious port bindings, `@` character redirection detection.
+* **Heuristics**: Visual brand-spoofing (checking for domains like `secures-paypal.com` using Typosquatting heuristics).
 
 ---
 
-## 5. Defense Q&A: Common Examiner Questions
+## 💬 Recruiter & Hiring Manager Q&A
 
-### Q1: *"Why did you use Random Forest instead of Deep Learning (like CNN/LSTM)?"*
-* **Answer**: *"Deep Learning models require massive datasets, long training times, and expensive GPU resources. Random Forest runs predictions in under 5 milliseconds on a single CPU core, handles mixed numeric/binary tabular features beautifully, and can be retrained in under 3 seconds in our live feedback loop, which is critical for lightweight, free cloud deployments."*
+**Q: "How does the backend hot-swap the model in production without downtime?"**
+> *"When the pending feedback queue reaches 10, a background worker starts. It fits the new Random Forest classifier on the updated dataset, saves the pickle file, and then updates the global variable pointing to the model instance in memory. Since Python variables are references, all incoming scan requests immediately route to the new model pointer with zero downtime."*
 
-### Q2: *"Render has an ephemeral disk. When it sleeps, doesn't it lose all the retrained models and feedback data?"*
-* **Answer**: *"Yes, Render's free tier has an ephemeral disk that resets daily. We solved this constraint by designing an **MLOps data branch structure**. The backend pushes the updated `urls.csv`, `model_metadata.json`, and `model.pkl` to a dedicated **`model-sync`** branch. Render is configured to run the server from the `model-sync` branch. This preserves all self-evolving models across restarts, while keeping the developer's **`main`** branch commit history completely pristine."*
+**Q: "Why pin dependencies like scikit-learn explicitly?"**
+> *"Python's `pickle` library is highly sensitive to package versions. If the version of scikit-learn used to train the baseline model locally differs from the version on the web server, loading the model will crash on startup. Pinning version `1.8.0` ensures absolute pickle compatibility between environments."*
 
-### Q3: *"Wait, doesn't pushing to GitHub trigger a continuous deployment build loop on Render/Vercel every time?"*
-* **Answer**: *"No. We append `[skip ci]` to our git commit message. Both Render and Vercel read this tag and skip compiling a new build, preventing continuous deployment loops while securing our model files."*
-
-### Q4: *"What is the purpose of the threshold slider on the frontend?"*
-* **Answer**: *"The slider adjusts the decision boundary threshold of the model locally. The Random Forest model outputs a risk probability from 0% to 100%. By moving the slider, we can dynamically change the classification strictness (e.g., a 40% threshold flags suspicious links faster, whereas a 70% threshold reduces false alarms). This is done entirely client-side without retraining."*
+**Q: "How is the queue size calculated dynamically without storing local files?"**
+> *"To avoid state corruption on stateless container restarts, the queue size is calculated on demand by comparing the row count of `urls.csv` with the `samples_count` logged inside `model_metadata.json` (which records the exact number of samples the active model was trained on). The difference is the pending queue size."*
