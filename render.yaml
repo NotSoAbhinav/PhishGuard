@@ -4,3 +4,20 @@ services:
     env: python
     buildCommand: pip install -r backend/requirements.txt
     startCommand: gunicorn --chdir backend app:app
+    envVars:
+      - key: PHISHGUARD_API_KEY
+        generateValue: true
+
+  - type: static
+    name: phishguard-frontend
+    buildCommand: python replace_api_url.py
+    publishPath: frontend
+    envVars:
+      - key: PHISHGUARD_API_URL
+        fromService:
+          name: phishguard-api
+          value: url
+      - key: PHISHGUARD_API_KEY
+        fromService:
+          name: phishguard-api
+          value: envVar/PHISHGUARD_API_KEY

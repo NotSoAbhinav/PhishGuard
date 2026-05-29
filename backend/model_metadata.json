@@ -1,0 +1,8 @@
+{
+  "version": "3.0.1",
+  "trained_at": "2026-05-29T06:15:39.873452Z",
+  "samples_count": 205,
+  "cv_accuracy": 0.9951219512195122,
+  "test_accuracy": 1.0,
+  "features_count": 24
+}
