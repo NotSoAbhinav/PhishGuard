@@ -73,10 +73,54 @@ function updatePendingFeedbackUI(count, threshold) {
   }
 }
 
-// 2. Verify API Health and Fetch Version / Metrics
+
+
+// 2. Helper: Print line in Hacker Terminal
+function printTerminalLine(text, type = "") {
+  const body = document.getElementById("terminalBody");
+  if (!body) return null;
+  
+  // Remove existing cursor if any
+  const oldCursor = body.querySelector(".terminal-cursor");
+  if (oldCursor) oldCursor.remove();
+  
+  const line = document.createElement("div");
+  line.className = `terminal-line ${type}`;
+  
+  if (type === "prompt") {
+    line.innerHTML = `<span class="t-prompt">$</span> ${text}`;
+  } else {
+    line.innerText = text;
+  }
+  
+  body.appendChild(line);
+  
+  // Append new cursor to the end
+  const cursor = document.createElement("span");
+  cursor.className = "terminal-cursor";
+  body.appendChild(cursor);
+  
+  // Auto-scroll to bottom
+  body.scrollTop = body.scrollHeight;
+  return line;
+}
+
+// Helper: Generate text progress bar for cold starts
+function getTerminalProgressBar(elapsed, duration) {
+  const percentage = Math.min(100, Math.round((elapsed / duration) * 100));
+  const barLength = 20;
+  const filledLength = Math.round((percentage / 100) * barLength);
+  const emptyLength = barLength - filledLength;
+  const bar = "#".repeat(filledLength) + ".".repeat(emptyLength);
+  const remaining = Math.max(0, duration - elapsed);
+  return `[SYS] Booting Render VM: [${bar}] ${percentage}% (${remaining}s remaining)`;
+}
+
+// 2a. Verify API Health and Fetch Version / Metrics
 async function verifyApiHealth() {
   const statusIndicator = document.getElementById("statusIndicator");
   const modelVerBadge = document.getElementById("modelVerBadge");
+  const connectingLine = document.getElementById("termLineConnecting");
 
   try {
     const res = await fetch(`${API_BASE}/`, {
@@ -86,19 +130,23 @@ async function verifyApiHealth() {
 
     if (res.ok) {
       const data = await res.json();
+      
+      // Update terminal logs
+      if (connectingLine) connectingLine.innerText = "[SYS] Establishing API handshake... [OK]";
+      printTerminalLine("Connection established successfully!", "text-success");
+      printTerminalLine(`Model version v${data.model_version} loaded.`, "text-success");
+      printTerminalLine("Entering Dashboard...", "text-info");
+
       statusIndicator.className = "status-indicator online";
       statusIndicator.querySelector(".status-text").innerText = "API Online";
       modelVerBadge.innerText = `v${data.model_version}`;
       
-      // Dismiss the initial loading screen
-      const loader = document.getElementById("apiLoaderScreen");
-      if (loader) loader.classList.add("hidden");
+      // Dismiss the terminal overlay after a short delay for premium UX
+      setTimeout(() => {
+        const loader = document.getElementById("apiLoaderScreen");
+        if (loader) loader.classList.add("hidden");
+      }, 1000);
 
-      // Dismiss the cold start modal if active
-      const modal = document.getElementById("coldStartModal");
-      if (modal && !modal.classList.contains("hidden")) {
-        modal.classList.add("hidden");
-      }
       if (coldStartInterval) {
         clearInterval(coldStartInterval);
         coldStartInterval = null;
@@ -116,31 +164,26 @@ async function verifyApiHealth() {
     statusIndicator.className = "status-indicator offline";
     statusIndicator.querySelector(".status-text").innerText = "API Offline (Cold Start)";
     
-    // Dismiss the initial loading screen
-    const loader = document.getElementById("apiLoaderScreen");
-    if (loader) loader.classList.add("hidden");
-
-    // Start cold start countdown
+    if (connectingLine) connectingLine.innerText = "[SYS] Establishing API handshake... [TIMEOUT]";
+    
+    // Start cold start countdown in the terminal
     startColdStartCountdown();
   }
 }
 
-// 2a. Cold Start Countdown & Background Polling
+// 2b. Cold Start Countdown & Background Polling (Terminal-themed)
 function startColdStartCountdown() {
   if (isColdStartActive) return;
   isColdStartActive = true;
 
-  const modal = document.getElementById("coldStartModal");
-  const countdownText = document.getElementById("coldStartCountdown");
-  const progressBar = document.getElementById("coldStartProgressBar");
-
-  if (modal) modal.classList.remove("hidden");
+  printTerminalLine("API offline. Sleep state detected.", "text-warn");
+  printTerminalLine("Initiating server wake-up sequence...", "text-info");
   
   let elapsed = 0;
   const duration = 50; // Render free tier container boots in ~50 seconds
 
-  if (countdownText) countdownText.innerText = `${duration}s`;
-  if (progressBar) progressBar.style.width = "0%";
+  // Create progress bar line in the terminal
+  const progressLine = printTerminalLine(getTerminalProgressBar(0, duration), "text-info");
 
   if (coldStartInterval) clearInterval(coldStartInterval);
 
@@ -148,17 +191,22 @@ function startColdStartCountdown() {
     elapsed++;
     const remaining = Math.max(0, duration - elapsed);
 
-    if (countdownText) {
-      if (remaining > 0) {
-        countdownText.innerText = `${remaining}s`;
-      } else {
-        countdownText.innerText = "Connecting...";
-      }
+    // Update progress bar
+    if (progressLine) {
+      progressLine.innerText = getTerminalProgressBar(elapsed, duration);
     }
 
-    if (progressBar) {
-      const percentage = Math.min(100, (elapsed / duration) * 100);
-      progressBar.style.width = `${percentage}%`;
+    // Print helpful logging check-ins as time passes
+    if (elapsed === 10) {
+      printTerminalLine("[SYS] Allocating Render container resources...", "text-info");
+    } else if (elapsed === 20) {
+      printTerminalLine("[SYS] Booting virtual machine kernel...", "text-info");
+    } else if (elapsed === 30) {
+      printTerminalLine("[SYS] Loading dependencies & Flask server (Gunicorn)...", "text-info");
+    } else if (elapsed === 40) {
+      printTerminalLine("[SYS] Loading Random Forest model weights (24 dimensions)...", "text-info");
+    } else if (elapsed === 45) {
+      printTerminalLine("[SYS] Overwriting weights from model-sync branch...", "text-info");
     }
 
     // Every 5 seconds (or when timer hits 0), check if the server is back online
@@ -175,10 +223,8 @@ function startColdStartCountdown() {
           coldStartInterval = null;
           isColdStartActive = false;
 
-          const loader = document.getElementById("apiLoaderScreen");
-          if (loader) loader.classList.add("hidden");
-
-          if (modal) modal.classList.add("hidden");
+          printTerminalLine("API Server is awake! Connected successfully.", "text-success");
+          printTerminalLine("Entering Dashboard...", "text-info");
 
           const statusIndicator = document.getElementById("statusIndicator");
           if (statusIndicator) {
@@ -194,6 +240,12 @@ function startColdStartCountdown() {
           fetchGlobalStats();
           fetchHistory();
 
+          // Smoothly exit the terminal loader screen
+          setTimeout(() => {
+            const loader = document.getElementById("apiLoaderScreen");
+            if (loader) loader.classList.add("hidden");
+          }, 1200);
+
           showToast("API Server is awake! Connected successfully.", "⚡", 4000);
         }
       } catch (err) {
@@ -201,9 +253,9 @@ function startColdStartCountdown() {
       }
     }
 
-    // If it's taking unusually long (e.g., over 90 seconds)
+    // If it's taking unusually long
     if (elapsed > 90) {
-      if (countdownText) countdownText.innerText = "Waking up...";
+      printTerminalLine("[WARN] Boot is taking longer than expected. Retrying...", "text-warn");
     }
   }, 1000);
 }
