@@ -327,6 +327,25 @@ function updateSensitivity(val) {
 
 function updateThresholdDisplay(val) {
   document.getElementById("thresholdVal").innerText = `${val}%`;
+
+  const desc = document.getElementById("thresholdDesc");
+  const dot = document.getElementById("policyDot");
+
+  if (!desc || !dot) return;
+
+  if (val >= 20 && val < 40) {
+    desc.innerText = "Strict Mode: Flags minor anomalies. High security footprint, but increases the probability of false alarms.";
+    dot.style.background = "#ef4444"; // Red
+    dot.style.boxShadow = "0 0 10px #ef4444";
+  } else if (val >= 40 && val <= 65) {
+    desc.innerText = "Balanced Mode: Standard corporate filter. Optimal trade-off between threat detection and false alarm accuracy.";
+    dot.style.background = "#3b82f6"; // Blue
+    dot.style.boxShadow = "0 0 10px rgba(59, 130, 246, 0.8)";
+  } else {
+    desc.innerText = "Permissive Mode: Flags only high-confidence threats. Minimal false alarms, but may miss stealthy or obfuscated links.";
+    dot.style.background = "#f59e0b"; // Orange/Yellow
+    dot.style.boxShadow = "0 0 10px #f59e0b";
+  }
 }
 
 // 8. Populate Heuristic Audit Cards

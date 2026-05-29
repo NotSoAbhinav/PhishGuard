@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PhishGuard AI 🔐 - SaaS Phishing Intelligence & Threat Auditor</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   
   <!-- Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,9 +140,13 @@
             </div>
             <input type="range" id="sensitivitySlider" min="20" max="90" value="50" class="saas-slider" oninput="updateSensitivity(this.value)" />
             <div class="slider-descriptions">
-              <span>Loose (20%)</span>
+              <span>Strict (20%)</span>
               <span>Balanced (50%)</span>
-              <span>Strict (90%)</span>
+              <span>Permissive (90%)</span>
+            </div>
+            <div class="threshold-policy-card" id="thresholdPolicyCard">
+              <span class="policy-dot" id="policyDot"></span>
+              <p class="policy-desc" id="thresholdDesc">Balanced Mode: Standard corporate filter. Optimal balance of threat detection and accuracy.</p>
             </div>
             <div class="info-alert">
               <svg class="info-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

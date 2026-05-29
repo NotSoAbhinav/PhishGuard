@@ -489,6 +489,34 @@ body {
   margin-top: -4px;
 }
 
+.threshold-policy-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-top: 6px;
+  transition: var(--transition);
+}
+
+.policy-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--primary);
+  box-shadow: 0 0 6px var(--primary-glow);
+  transition: var(--transition);
+}
+
+.policy-desc {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
 .info-alert {
   display: flex;
   gap: 12px;
