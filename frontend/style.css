@@ -1845,3 +1845,81 @@ body::before {
   0% { opacity: 0.4; }
   100% { opacity: 1; }
 }
+
+/* Demo Banner styles */
+.demo-banner {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--warning);
+  font-size: 13.5px;
+  font-family: var(--font-mono);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.05);
+  animation: slideDown 0.3s ease;
+  transition: all 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.demo-banner.ready {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--safe);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.05);
+}
+
+.banner-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(245, 158, 11, 0.15);
+  border-top-color: var(--warning);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.demo-banner.ready .banner-spinner {
+  display: none; /* Hide spinner when live mode is ready */
+}
+
+.banner-text {
+  flex-grow: 1;
+}
+
+.banner-btn {
+  background: var(--warning);
+  color: #030712;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.banner-btn:hover {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.demo-banner.ready .banner-btn {
+  background: var(--safe);
+  color: #030712;
+}
+
+.demo-banner.ready .banner-btn:hover {
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
