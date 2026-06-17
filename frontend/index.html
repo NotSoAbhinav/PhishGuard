@@ -18,21 +18,85 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- INITIALIZATION LOADING SCREEN (TERMINAL THEMED) -->
+  <!-- INITIALIZATION LOADING SCREEN (ENGAGING & EDUCATIONAL COLD START) -->
   <div id="apiLoaderScreen" class="modal-overlay">
-    <div class="terminal-window">
-      <div class="terminal-header">
-        <div class="terminal-buttons">
-          <span class="t-btn red"></span>
-          <span class="t-btn yellow"></span>
-          <span class="t-btn green"></span>
+    <div class="loader-container">
+      <div class="loader-grid">
+        <!-- Column 1: Hacker Terminal (Engagement) -->
+        <div class="loader-terminal-column">
+          <div class="terminal-window">
+            <div class="terminal-header">
+              <div class="terminal-buttons">
+                <span class="t-btn red"></span>
+                <span class="t-btn yellow"></span>
+                <span class="t-btn green"></span>
+              </div>
+              <div class="terminal-title">bash - phishguard-init.sh</div>
+            </div>
+            <div class="terminal-body" id="terminalBody">
+              <div class="terminal-line prompt"><span class="t-prompt">$</span> ./phishguard-init.sh</div>
+              <div class="terminal-line text-info">[SYS] Booting PhishGuard Threat Auditor v3.5.0...</div>
+              <div class="terminal-line" id="termLineConnecting">[SYS] Establishing API handshake...</div>
+            </div>
+          </div>
         </div>
-        <div class="terminal-title">bash - phishguard-init.sh</div>
-      </div>
-      <div class="terminal-body" id="terminalBody">
-        <div class="terminal-line prompt"><span class="t-prompt">$</span> ./phishguard-init.sh</div>
-        <div class="terminal-line text-info">[SYS] Booting PhishGuard Threat Auditor v3.5.0...</div>
-        <div class="terminal-line" id="termLineConnecting">[SYS] Establishing API handshake...</div>
+
+        <!-- Column 2: Cold Start Explanation & Graphical Progress (Clarity) -->
+        <div class="loader-info-column">
+          <div class="loader-info-card">
+            <div class="info-card-header">
+              <span class="info-card-icon">💡</span>
+              <h3>System Boot Details</h3>
+            </div>
+            <p class="info-description">
+              Our API uses Render's free hosting tier, which goes into a temporary sleep state after 15 minutes of inactivity. 
+            </p>
+            <div class="cold-start-explainer">
+              <strong>Why the wait?</strong> The server must build the virtual environment and load our 24-dimensional Random Forest model weights into memory. Once awake, all audits are instantaneous!
+            </div>
+
+            <!-- Graphical Progress Bar -->
+            <div class="graphical-progress-container">
+              <div class="progress-labels">
+                <span class="progress-status-text" id="loaderProgressStatus">Connecting...</span>
+                <span class="progress-percent-text" id="loaderProgressPercent">0%</span>
+              </div>
+              <div class="g-progress-bar">
+                <div class="g-progress-fill" id="loaderProgressFill" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <!-- Visual Boot Pipeline Checklist -->
+            <div class="boot-pipeline">
+              <div class="boot-step" id="stepVM">
+                <div class="step-dot"></div>
+                <span class="step-label">Allocate Render Container</span>
+              </div>
+              <div class="boot-step" id="stepFlask">
+                <div class="step-dot"></div>
+                <span class="step-label">Initialize Flask & Gunicorn</span>
+              </div>
+              <div class="boot-step" id="stepModel">
+                <div class="step-dot"></div>
+                <span class="step-label">Load Random Forest Model</span>
+              </div>
+              <div class="boot-step" id="stepReady">
+                <div class="step-dot"></div>
+                <span class="step-label">Establish Handshake</span>
+              </div>
+            </div>
+
+            <!-- Quick Action Options -->
+            <div class="loader-actions">
+              <button class="loader-btn demo-btn" id="btnLaunchDemo">
+                Proceed in Demo Mode ⚡
+              </button>
+              <button class="loader-btn retry-btn hidden" id="btnRetryInit">
+                Retry Connection 🔄
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

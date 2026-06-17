@@ -22,9 +22,35 @@ let currentFilter = "all";
 let isColdStartActive = false;
 let coldStartInterval = null;
 
+// Offline Demo Mode State
+let isDemoMode = false;
+let mockModelVersion = "3.5.0-DEMO";
+let mockPendingFeedbackCount = 3;
+
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
   initChart();
+  
+  // Bind loader screen actions
+  const btnLaunchDemo = document.getElementById("btnLaunchDemo");
+  if (btnLaunchDemo) {
+    btnLaunchDemo.addEventListener("click", enterDemoMode);
+  }
+  const btnRetryInit = document.getElementById("btnRetryInit");
+  if (btnRetryInit) {
+    btnRetryInit.addEventListener("click", () => {
+      // Reset visual state and retry
+      const progressStatusText = document.getElementById("loaderProgressStatus");
+      if (progressStatusText) progressStatusText.innerText = "Re-connecting...";
+      btnRetryInit.classList.add("hidden");
+      
+      const connLine = document.getElementById("termLineConnecting");
+      if (connLine) connLine.innerText = "[SYS] Establishing API handshake...";
+      
+      verifyApiHealth();
+    });
+  }
+
   verifyApiHealth();
   updateThresholdDisplay(50);
 });
@@ -106,6 +132,7 @@ function printTerminalLine(text, type = "") {
 }
 
 // Helper: Generate text progress bar for cold starts
+// Helper: Generate text progress bar for cold starts
 function getTerminalProgressBar(elapsed, duration) {
   const percentage = Math.min(100, Math.round((elapsed / duration) * 100));
   const barLength = 20;
@@ -116,8 +143,127 @@ function getTerminalProgressBar(elapsed, duration) {
   return `[SYS] Booting Render VM: [${bar}] ${percentage}% (${remaining}s remaining)`;
 }
 
-// 2a. Verify API Health and Fetch Version / Metrics
+// 2. Graphical Progress Loader Controller
+function updateGraphicalLoader(elapsed, duration) {
+  const pct = Math.min(100, Math.round((elapsed / duration) * 100));
+  
+  const progressPercentText = document.getElementById("loaderProgressPercent");
+  const progressFill = document.getElementById("loaderProgressFill");
+  const progressStatusText = document.getElementById("loaderProgressStatus");
+  
+  if (progressPercentText) progressPercentText.innerText = `${pct}%`;
+  if (progressFill) progressFill.style.width = `${pct}%`;
+  
+  if (progressStatusText) {
+    if (pct < 25) {
+      progressStatusText.innerText = "Allocating Render container...";
+    } else if (pct < 55) {
+      progressStatusText.innerText = "Initializing Flask server...";
+    } else if (pct < 85) {
+      progressStatusText.innerText = "Loading Machine Learning weights...";
+    } else if (pct < 100) {
+      progressStatusText.innerText = "Establishing API handshake...";
+    } else {
+      progressStatusText.innerText = "Waiting for handshake...";
+    }
+  }
+
+  // Update pipeline steps
+  const stepVM = document.getElementById("stepVM");
+  const stepFlask = document.getElementById("stepFlask");
+  const stepModel = document.getElementById("stepModel");
+  const stepReady = document.getElementById("stepReady");
+
+  // stepVM
+  if (pct >= 0 && pct < 25) {
+    if (stepVM) { stepVM.className = "boot-step active"; }
+  } else if (pct >= 25) {
+    if (stepVM) { stepVM.className = "boot-step completed"; }
+  }
+
+  // stepFlask
+  if (pct >= 25 && pct < 55) {
+    if (stepFlask) { stepFlask.className = "boot-step active"; }
+  } else if (pct >= 55) {
+    if (stepFlask) { stepFlask.className = "boot-step completed"; }
+  } else {
+    if (pct < 25 && stepFlask) { stepFlask.className = "boot-step"; }
+  }
+
+  // stepModel
+  if (pct >= 55 && pct < 85) {
+    if (stepModel) { stepModel.className = "boot-step active"; }
+  } else if (pct >= 85) {
+    if (stepModel) { stepModel.className = "boot-step completed"; }
+  } else {
+    if (pct < 55 && stepModel) { stepModel.className = "boot-step"; }
+  }
+
+  // stepReady
+  if (pct >= 85 && pct < 100) {
+    if (stepReady) { stepReady.className = "boot-step active"; }
+  } else if (pct >= 100) {
+    if (stepReady) { stepReady.className = "boot-step active"; }
+  } else {
+    if (pct < 85 && stepReady) { stepReady.className = "boot-step"; }
+  }
+}
+
+// 2a. Action: Enter Offline Demo Mode
+function enterDemoMode() {
+  isDemoMode = true;
+  if (coldStartInterval) {
+    clearInterval(coldStartInterval);
+    coldStartInterval = null;
+  }
+  isColdStartActive = false;
+
+  printTerminalLine("Bypassing server connection...", "text-warn");
+  printTerminalLine("Entering Demo Mode (Offline Simulator)...", "text-success");
+  
+  // Set pipeline to finished state visually
+  const stepVM = document.getElementById("stepVM");
+  const stepFlask = document.getElementById("stepFlask");
+  const stepModel = document.getElementById("stepModel");
+  const stepReady = document.getElementById("stepReady");
+  if (stepVM) stepVM.className = "boot-step completed";
+  if (stepFlask) stepFlask.className = "boot-step completed";
+  if (stepModel) stepModel.className = "boot-step completed";
+  if (stepReady) stepReady.className = "boot-step completed";
+
+  const progressPercentText = document.getElementById("loaderProgressPercent");
+  const progressFill = document.getElementById("loaderProgressFill");
+  const progressStatusText = document.getElementById("loaderProgressStatus");
+  if (progressPercentText) progressPercentText.innerText = "100%";
+  if (progressFill) progressFill.style.width = "100%";
+  if (progressStatusText) progressStatusText.innerText = "Demo Mode Activated";
+
+  // Customize header status badge to show Demo Mode
+  const statusIndicator = document.getElementById("statusIndicator");
+  if (statusIndicator) {
+    statusIndicator.className = "status-indicator demo";
+    statusIndicator.querySelector(".status-text").innerText = "Demo Mode";
+  }
+
+  const modelVerBadge = document.getElementById("modelVerBadge");
+  if (modelVerBadge) modelVerBadge.innerText = mockModelVersion;
+
+  // Load simulated stats & history
+  fetchGlobalStats();
+  fetchHistory();
+
+  // Exit loader screen smoothly
+  setTimeout(() => {
+    const loader = document.getElementById("apiLoaderScreen");
+    if (loader) loader.classList.add("hidden");
+    showToast("Offline Demo Mode activated successfully!", "⚡", 4000);
+  }, 1000);
+}
+
+// 2b. Verify API Health and Fetch Version / Metrics
 async function verifyApiHealth() {
+  if (isDemoMode) return;
+  
   const statusIndicator = document.getElementById("statusIndicator");
   const modelVerBadge = document.getElementById("modelVerBadge");
   const connectingLine = document.getElementById("termLineConnecting");
@@ -137,9 +283,28 @@ async function verifyApiHealth() {
       printTerminalLine(`Model version v${data.model_version} loaded.`, "text-success");
       printTerminalLine("Entering Dashboard...", "text-info");
 
-      statusIndicator.className = "status-indicator online";
-      statusIndicator.querySelector(".status-text").innerText = "API Online";
-      modelVerBadge.innerText = `v${data.model_version}`;
+      // Mark visual checklist completed
+      const stepVM = document.getElementById("stepVM");
+      const stepFlask = document.getElementById("stepFlask");
+      const stepModel = document.getElementById("stepModel");
+      const stepReady = document.getElementById("stepReady");
+      if (stepVM) stepVM.className = "boot-step completed";
+      if (stepFlask) stepFlask.className = "boot-step completed";
+      if (stepModel) stepModel.className = "boot-step completed";
+      if (stepReady) stepReady.className = "boot-step completed";
+
+      const progressPercentText = document.getElementById("loaderProgressPercent");
+      const progressFill = document.getElementById("loaderProgressFill");
+      const progressStatusText = document.getElementById("loaderProgressStatus");
+      if (progressPercentText) progressPercentText.innerText = "100%";
+      if (progressFill) progressFill.style.width = "100%";
+      if (progressStatusText) progressStatusText.innerText = "Handshake success!";
+
+      if (statusIndicator) {
+        statusIndicator.className = "status-indicator online";
+        statusIndicator.querySelector(".status-text").innerText = "API Online";
+      }
+      if (modelVerBadge) modelVerBadge.innerText = `v${data.model_version}`;
       
       // Dismiss the terminal overlay after a short delay for premium UX
       setTimeout(() => {
@@ -161,8 +326,10 @@ async function verifyApiHealth() {
     }
   } catch (error) {
     console.error("API Connection Error:", error);
-    statusIndicator.className = "status-indicator offline";
-    statusIndicator.querySelector(".status-text").innerText = "API Offline (Cold Start)";
+    if (statusIndicator) {
+      statusIndicator.className = "status-indicator offline";
+      statusIndicator.querySelector(".status-text").innerText = "API Offline";
+    }
     
     if (connectingLine) connectingLine.innerText = "[SYS] Establishing API handshake... [TIMEOUT]";
     
@@ -171,13 +338,22 @@ async function verifyApiHealth() {
   }
 }
 
-// 2b. Cold Start Countdown & Background Polling (Terminal-themed)
+// 2c. Cold Start Countdown & Background Polling (Terminal-themed)
 function startColdStartCountdown() {
-  if (isColdStartActive) return;
+  if (isColdStartActive || isDemoMode) return;
   isColdStartActive = true;
 
-  printTerminalLine("API offline. Sleep state detected.", "text-warn");
-  printTerminalLine("Initiating server wake-up sequence...", "text-info");
+  const isLocal = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
+
+  if (isLocal) {
+    printTerminalLine("Local API offline. Server not detected at " + API_BASE, "text-warn");
+    printTerminalLine("[SYS] Startup command: python backend/app.py", "text-info");
+    printTerminalLine("[SYS] Ensure dependencies are installed from requirements.txt", "text-info");
+    printTerminalLine("You can also run in Offline Demo Mode using the panel on the right.", "text-info");
+  } else {
+    printTerminalLine("Production API offline. Sleep state detected.", "text-warn");
+    printTerminalLine("Initiating server wake-up sequence...", "text-info");
+  }
   
   let elapsed = 0;
   const duration = 50; // Render free tier container boots in ~50 seconds
@@ -185,16 +361,30 @@ function startColdStartCountdown() {
   // Create progress bar line in the terminal
   const progressLine = printTerminalLine(getTerminalProgressBar(0, duration), "text-info");
 
+  // Show retry button so they can manually trigger it anytime
+  const retryBtn = document.getElementById("btnRetryInit");
+  if (retryBtn) retryBtn.classList.remove("hidden");
+
   if (coldStartInterval) clearInterval(coldStartInterval);
 
   coldStartInterval = setInterval(async () => {
+    if (isDemoMode) {
+      clearInterval(coldStartInterval);
+      coldStartInterval = null;
+      isColdStartActive = false;
+      return;
+    }
+
     elapsed++;
     const remaining = Math.max(0, duration - elapsed);
 
-    // Update progress bar
+    // Update terminal progress bar
     if (progressLine) {
       progressLine.innerText = getTerminalProgressBar(elapsed, duration);
     }
+
+    // Update graphical loader and pipeline checklist steps
+    updateGraphicalLoader(elapsed, duration);
 
     // Print helpful logging check-ins as time passes
     if (elapsed === 10) {
@@ -225,6 +415,23 @@ function startColdStartCountdown() {
 
           printTerminalLine("API Server is awake! Connected successfully.", "text-success");
           printTerminalLine("Entering Dashboard...", "text-info");
+
+          // Update checklist to completed
+          const stepVM = document.getElementById("stepVM");
+          const stepFlask = document.getElementById("stepFlask");
+          const stepModel = document.getElementById("stepModel");
+          const stepReady = document.getElementById("stepReady");
+          if (stepVM) stepVM.className = "boot-step completed";
+          if (stepFlask) stepFlask.className = "boot-step completed";
+          if (stepModel) stepModel.className = "boot-step completed";
+          if (stepReady) stepReady.className = "boot-step completed";
+
+          const progressPercentText = document.getElementById("loaderProgressPercent");
+          const progressFill = document.getElementById("loaderProgressFill");
+          const progressStatusText = document.getElementById("loaderProgressStatus");
+          if (progressPercentText) progressPercentText.innerText = "100%";
+          if (progressFill) progressFill.style.width = "100%";
+          if (progressStatusText) progressStatusText.innerText = "Connected!";
 
           const statusIndicator = document.getElementById("statusIndicator");
           if (statusIndicator) {
@@ -262,6 +469,38 @@ function startColdStartCountdown() {
 
 // 3. Fetch Global Stats
 async function fetchGlobalStats() {
+  if (isDemoMode) {
+    // Generate simulated stats
+    const totalScansElem = document.getElementById("statTotalScans");
+    const currentTotal = parseInt(totalScansElem.innerText) || 0;
+    const targetTotal = sessionHistory.length + 142;
+    animateValue("statTotalScans", currentTotal, targetTotal, 1000);
+    
+    // calculate actual phishing rate in history
+    let threatRate = 34.5;
+    if (sessionHistory.length > 0) {
+      const phishingCount = sessionHistory.filter(h => h.result === "phishing").length;
+      threatRate = (phishingCount / sessionHistory.length) * 100;
+    }
+    const threatRateElem = document.getElementById("statThreatRate");
+    const currentThreat = parseFloat(threatRateElem.innerText) || 0;
+    animateValue("statThreatRate", currentThreat, threatRate, 1000, "%");
+    
+    const cacheHitsElem = document.getElementById("statCacheHits");
+    const currentCache = parseFloat(cacheHitsElem.innerText) || 0;
+    animateValue("statCacheHits", currentCache, 22.4, 1000, "%");
+    
+    const accuracyElem = document.getElementById("statAccuracy");
+    const currentAccuracy = parseFloat(accuracyElem.innerText) || 0;
+    animateValue("statAccuracy", currentAccuracy, 95.8, 1000, "%");
+    
+    const modelVerBadge = document.getElementById("modelVerBadge");
+    if (modelVerBadge) modelVerBadge.innerText = mockModelVersion;
+    
+    updatePendingFeedbackUI(mockPendingFeedbackCount, 10);
+    return;
+  }
+
   try {
     const res = await fetch(`${API_BASE}/stats`, {
       method: "GET",
@@ -411,6 +650,36 @@ async function analyzeURL() {
   }
 
   try {
+    if (isDemoMode) {
+      // Simulate scanning latency
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const data = getMockAnalyzeResponse(url);
+      currentScan = data;
+      
+      renderScanResult();
+      showToast("Analysis complete (Offline Demo Mode).", "🛡️");
+      
+      // Update history in Demo Mode
+      sessionHistory.unshift({
+        url: data.url,
+        result: data.result,
+        risk_score: data.risk_score,
+        timestamp: "Recent"
+      });
+      
+      sessionCounts = { safe: 0, phishing: 0 };
+      sessionHistory.forEach(item => {
+        if (item.result === "phishing") sessionCounts.phishing++;
+        else sessionCounts.safe++;
+      });
+      
+      updateChartDistribution();
+      renderHistoryList();
+      fetchGlobalStats();
+      return;
+    }
+
     const response = await fetch(`${API_BASE}/analyze`, {
       method: "POST",
       headers: {
@@ -700,6 +969,26 @@ async function submitFeedback(label) {
 
   showToast("Submitting feedback and evolving the model...", "🧠");
 
+  if (isDemoMode) {
+    // Simulate training latency
+    setTimeout(() => {
+      mockPendingFeedbackCount++;
+      if (mockPendingFeedbackCount >= 10) {
+        mockPendingFeedbackCount = 0;
+        
+        // Bump version
+        const parts = mockModelVersion.replace("-DEMO", "").split(".");
+        parts[2] = parseInt(parts[2]) + 1;
+        mockModelVersion = parts.join(".") + "-DEMO";
+        showToast(`Model retrained! Hot-swapped to version v${mockModelVersion}.`, "⚡", 4000);
+      } else {
+        showToast(`Feedback recorded! Retraining queue: ${mockPendingFeedbackCount}/10.`, "🔄", 3500);
+      }
+      fetchGlobalStats();
+    }, 1200);
+    return;
+  }
+
   try {
     const response = await fetch(`${API_BASE}/feedback`, {
       method: "POST",
@@ -735,6 +1024,48 @@ async function submitFeedback(label) {
 let sessionHistory = [];
 
 async function fetchHistory() {
+  if (isDemoMode) {
+    if (sessionHistory.length === 0) {
+      sessionHistory = [
+        {
+          url: "https://github.com/NotSoAbhinav/PhishGuard",
+          result: "safe",
+          risk_score: 5,
+          timestamp: "Recent"
+        },
+        {
+          url: "http://chase-bank-verify-identity-login.club/update",
+          result: "phishing",
+          risk_score: 94,
+          timestamp: "Recent"
+        },
+        {
+          url: "http://192.168.1.105/admin/login.php",
+          result: "phishing",
+          risk_score: 82,
+          timestamp: "Recent"
+        },
+        {
+          url: "https://google.com",
+          result: "safe",
+          risk_score: 2,
+          timestamp: "Recent"
+        }
+      ];
+    }
+    
+    // Rebuild counts
+    sessionCounts = { safe: 0, phishing: 0 };
+    sessionHistory.forEach(item => {
+      if (item.result === "phishing") sessionCounts.phishing++;
+      else sessionCounts.safe++;
+    });
+
+    updateChartDistribution();
+    renderHistoryList();
+    return;
+  }
+
   try {
     const res = await fetch(`${API_BASE}/history`, {
       method: "GET",
@@ -840,6 +1171,16 @@ function filterHistory(filterType) {
 async function clearHistoryFeed() {
   if (!confirm("Are you sure you want to clear the recent scan feed? This will flush the cache from the server.")) return;
   
+  if (isDemoMode) {
+    sessionHistory = [];
+    sessionCounts = { safe: 0, phishing: 0 };
+    updateChartDistribution();
+    renderHistoryList();
+    fetchGlobalStats();
+    showToast("Scan feed cleared successfully (Offline)", "🗑️");
+    return;
+  }
+
   try {
     const res = await fetch(`${API_BASE}/history/clear`, {
       method: "POST",
@@ -881,4 +1222,297 @@ function showToast(message, icon = "✨", duration = 3500) {
     toast.classList.remove("visible");
     toast.classList.add("hidden");
   }, duration);
+}
+
+// 14. Offline Demo Mode Feature Extractor & Response Mock
+function extractFeaturesMock(url) {
+  let domain = "";
+  let path = "";
+  let scheme = "";
+  try {
+    const parsed = new URL(url);
+    domain = parsed.hostname.toLowerCase();
+    path = parsed.pathname;
+    scheme = parsed.protocol.replace(":", "").toLowerCase();
+  } catch (e) {
+    const match = url.match(/^(https?):\/\/([^/]+)(.*)/i);
+    if (match) {
+      scheme = match[1].toLowerCase();
+      domain = match[2].toLowerCase();
+      path = match[3];
+    } else {
+      domain = url;
+    }
+  }
+
+  const urlLower = url.toLowerCase();
+  
+  // 1. URL Length
+  const urlLen = url.length;
+  // 2. Domain Length
+  const domLen = domain.length;
+  // 3. Path Length
+  const pathLen = path.length;
+  // 4. Dots in URL
+  const dotsUrl = (url.match(/\./g) || []).length;
+  // 5. Hyphens in URL
+  const hyphensUrl = (url.match(/-/g) || []).length;
+  // 6. Hyphens in Domain
+  const hyphensDom = (domain.match(/-/g) || []).length;
+  // 7. Subdomains
+  const dotsDom = (domain.match(/\./g) || []).length;
+  const subdomains = domain.startsWith("www.") ? Math.max(0, dotsDom - 2) : Math.max(0, dotsDom - 1);
+  // 8. HTTPS
+  const isHttps = scheme === "https" ? 1 : 0;
+  // 9. IP presence
+  const ipPattern = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/;
+  const isIp = ipPattern.test(domain) ? 1 : 0;
+  // 10. @ Symbol
+  const hasAt = url.includes("@") ? 1 : 0;
+  // 11. Double Slash in Path
+  const hasDoubleSlash = path.includes("//") ? 1 : 0;
+  // 12. Shorteners
+  const shorteners = ["bit.ly", "tinyurl.com", "t.co", "rebrand.ly", "is.gd", "buff.ly", "adf.ly", "ow.ly", "mcaf.ee", "su.pr"];
+  const isShortener = shorteners.some(s => domain.includes(s)) ? 1 : 0;
+  // 13. Port
+  let isPort = 0;
+  if (domain.includes(":")) {
+    const port = domain.split(":")[1];
+    if (port && port !== "80" && port !== "443") {
+      isPort = 1;
+    }
+  }
+  // 14. Suspicious TLD
+  const suspiciousTlds = ["xyz", "tk", "ml", "cf", "gq", "club", "top", "support", "info", "click", "work", "bid"];
+  const parts = domain.split(".");
+  const tld = parts[parts.length - 1] || "";
+  const isSuspiciousTld = suspiciousTlds.includes(tld) ? 1 : 0;
+  // 15. Digit Ratio in URL
+  const digitsCount = (url.match(/\d/g) || []).length;
+  const digitRatio = urlLen > 0 ? digitsCount / urlLen : 0;
+  // 16. Brand Spoofing
+  const brands = ["paypal", "google", "microsoft", "netflix", "amazon", "apple", "facebook", "chase", "bankofamerica", "yahoo", "github", "linkedin", "wellsfargo"];
+  let isBrandSpoof = 0;
+  brands.forEach(b => {
+    if (domain.includes(b)) {
+      const cleanDom = domain.replace("www.", "");
+      if (cleanDom !== b + ".com" && cleanDom !== b + ".org" && cleanDom !== b + ".net" && cleanDom !== b + ".co" && !cleanDom.endsWith("." + b + ".com")) {
+        isBrandSpoof = 1;
+      }
+    }
+  });
+  // 17. Shannon Entropy
+  const counts = {};
+  for (let i = 0; i < domain.length; i++) {
+    const c = domain[i];
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  let entropy = 0;
+  if (domain.length > 0) {
+    Object.values(counts).forEach(count => {
+      const p = count / domain.length;
+      entropy -= p * Math.log2(p);
+    });
+  }
+  // 18. Vowel Ratio
+  const vowels = (domain.match(/[aeiou]/gi) || []).length;
+  const vowelRatio = domLen > 0 ? vowels / domLen : 0;
+  // 19. Host Keyword
+  const sensitiveKeywords = ["login", "secure", "verify", "account", "update", "banking", "signin", "submit", "webscr", "cmd"];
+  const hasHostKeyword = sensitiveKeywords.some(k => domain.includes(k)) ? 1 : 0;
+  // 20. Consecutive characters
+  const hasConsecutive = (url.includes("--") || url.includes("...") || /\d{3,}/.test(url)) ? 1 : 0;
+  // 21. Typosquatting
+  let isTyposquatting = 0;
+  brands.forEach(b => {
+    if (domain.includes(b)) {
+      const cleanDom = domain.replace("www.", "");
+      if (cleanDom !== b + ".com" && cleanDom !== b + ".org" && cleanDom.includes(b)) {
+        isTyposquatting = 1;
+      }
+    }
+  });
+  // 22. Domain Digit Count
+  const domDigits = (domain.match(/\d/g) || []).length;
+  // 23. Query parameters count
+  let queryCount = 0;
+  if (url.includes("?")) {
+    const queryStr = url.split("?")[1];
+    queryCount = (queryStr.match(/[&=]/g) || []).length / 2;
+  }
+  // 24. Consecutive repeating letters
+  let repeating = 0;
+  for (let i = 0; i < domain.length - 2; i++) {
+    if (domain[i] === domain[i+1] && domain[i] === domain[i+2] && /[a-z]/i.test(domain[i])) {
+      repeating = 1;
+      break;
+    }
+  }
+
+  return [
+    urlLen, domLen, pathLen, dotsUrl,
+    hyphensUrl, hyphensDom, subdomains, isHttps,
+    isIp, hasAt, hasDoubleSlash, isShortener,
+    isPort, isSuspiciousTld, digitRatio, isBrandSpoof,
+    entropy, vowelRatio, hasHostKeyword, hasConsecutive,
+    isTyposquatting, domDigits, queryCount, repeating
+  ];
+}
+
+function getMockAnalyzeResponse(url) {
+  const features = extractFeaturesMock(url);
+  
+  // Calculate a risk score based on features
+  let riskScore = 0;
+  
+  if (features[8] === 1) riskScore += 40; // IP Address
+  if (features[15] === 1) riskScore += 35; // Brand Spoofing
+  if (features[20] === 1) riskScore += 30; // Typosquatting
+  if (features[9] === 1) riskScore += 35; // @ symbol
+  if (features[10] === 1) riskScore += 30; // double slash redirect
+  
+  if (features[7] === 0) riskScore += 20; // Insecure HTTP
+  if (features[11] === 1) riskScore += 15; // URL Shortener
+  if (features[13] === 1) riskScore += 15; // Suspicious TLD
+  if (features[12] === 1) riskScore += 15; // Non-standard port
+  if (features[18] === 1) riskScore += 15; // Host Keyword
+  if (features[19] === 1) riskScore += 10; // Consecutive characters
+  if (features[23] === 1) riskScore += 10; // Consecutive repeating letters
+  if (features[16] > 4.0) riskScore += 10; // High entropy
+  if (features[21] > 2) riskScore += 10; // Domain digits
+  
+  if (features[3] > 3) riskScore += 5; // dots
+  if (features[6] >= 2) riskScore += 5; // subdomains
+  if (features[5] >= 2) riskScore += 5; // hyphens in domain
+  if (features[0] > 75) riskScore += 5; // url length
+  
+  let finalScore = Math.min(99, Math.max(1, riskScore));
+  
+  // If HTTPS is 1 and no critical indicators, make it low risk
+  if (features[7] === 1 && features[8] === 0 && features[15] === 0 && features[20] === 0 && features[9] === 0) {
+    if (finalScore > 35) finalScore = 12; // typical safe score
+  }
+  
+  const classification = finalScore >= sensitivityThreshold ? "phishing" : "safe";
+  const confidence = finalScore > 75 ? "High" : (finalScore > 40 ? "Medium" : "Low");
+  
+  const featureNames = [
+    "URL Length", "Domain Length", "Path Length", "Dots in URL", 
+    "Hyphens in URL", "Hyphens in Domain", "Subdomain Count", "HTTPS Scheme", 
+    "IP Address Presence", "@ Symbol", "Double Slash Redirection", "URL Shortener", 
+    "Non-Standard Port", "Suspicious TLD", "Digit Ratio", "Brand Spoofing", 
+    "Shannon Entropy", "Vowel Ratio", "Host Keyword", "Consecutive Characters",
+    "Typosquatting", "Domain Digit Count", "Query Parameters", "Consecutive Repeating Letters"
+  ];
+  
+  const features_breakdown = [];
+  featureNames.forEach((name, idx) => {
+    const val = features[idx];
+    let status = "Safe";
+    
+    if (name === "Brand Spoofing" && val === 1) status = "Critical";
+    else if (name === "IP Address Presence" && val === 1) status = "Critical";
+    else if (name === "Double Slash Redirection" && val === 1) status = "Critical";
+    else if (name === "@ Symbol" && val === 1) status = "Critical";
+    else if (name === "Typosquatting" && val === 1) status = "Critical";
+    else if (name === "HTTPS Scheme" && val === 0) status = "Warning";
+    else if (name === "URL Shortener" && val === 1) status = "Warning";
+    else if (name === "Suspicious TLD" && val === 1) status = "Warning";
+    else if (name === "Non-Standard Port" && val === 1) status = "Warning";
+    else if (name === "Shannon Entropy" && val > 4.0) status = "Warning";
+    else if (name === "Host Keyword" && val === 1) status = "Warning";
+    else if (name === "Consecutive Characters" && val === 1) status = "Warning";
+    else if (name === "Domain Digit Count" && val > 2) status = "Warning";
+    else if (name === "Consecutive Repeating Letters" && val === 1) status = "Warning";
+    else if (name === "Subdomain Count" && val >= 2) status = "Info";
+    else if (name === "URL Length" && val > 75) status = "Info";
+    else if (name === "Vowel Ratio" && (val < 0.25 || val > 0.55)) status = "Info";
+    else if (name === "Query Parameters" && val > 3) status = "Info";
+    
+    features_breakdown.push({
+      name: name,
+      value: typeof val === "number" && !Number.isInteger(val) ? parseFloat(val.toFixed(4)) : val,
+      status: status
+    });
+  });
+  
+  const reasons = [];
+  const domain = url.includes("://") ? url.split("://")[1].split("/")[0] : url.split("/")[0];
+  const parts = domain.split(".");
+  const tld = parts[parts.length - 1] || "";
+
+  if (features[8] === 1) {
+    reasons.push({ severity: "critical", message: "Uses numerical IP address instead of domain name (high threat indicators)." });
+  }
+  if (features[15] === 1) {
+    reasons.push({ severity: "critical", message: "Brand spoofing: URL mimics a major brand name on an unofficial domain." });
+  }
+  if (features[20] === 1) {
+    reasons.push({ severity: "critical", message: "Typosquatting: Domain name is visually similar to a major brand (e.g. PayPal, Netflix)." });
+  }
+  if (features[10] === 1) {
+    reasons.push({ severity: "critical", message: "Contains '//' redirection pattern inside the URL path." });
+  }
+  if (features[9] === 1) {
+    reasons.push({ severity: "critical", message: "Contains '@' symbol, masking the destination domain." });
+  }
+  if (features[7] === 0) {
+    reasons.push({ severity: "warning", message: "Insecure connection: URL does not use HTTPS encryption." });
+  }
+  if (features[11] === 1) {
+    reasons.push({ severity: "warning", message: "Uses a known URL shortening service (hides original endpoint)." });
+  }
+  if (features[13] === 1) {
+    reasons.push({ severity: "warning", message: `Uses suspicious TLD (.${tld}) often associated with low-cost phishing sites.` });
+  }
+  if (features[12] === 1) {
+    reasons.push({ severity: "warning", message: "Specifies non-standard connection port." });
+  }
+  if (features[16] > 4.0) {
+    reasons.push({ severity: "warning", message: `High domain entropy (${features[16].toFixed(2)}): indicates high randomness (DGA signature).` });
+  }
+  if (features[18] === 1) {
+    reasons.push({ severity: "warning", message: "Sensitive security keyword detected inside the domain host name." });
+  }
+  if (features[19] === 1) {
+    reasons.push({ severity: "warning", message: "Suspicious consecutive character patterns (e.g. repeated dashes/dots/digits)." });
+  }
+  if (features[21] > 2) {
+    reasons.push({ severity: "warning", message: `Domain name contains multiple numbers (${features[21]} digits), typical of generated spam domains.` });
+  }
+  if (features[23] === 1) {
+    reasons.push({ severity: "warning", message: "Domain contains triple-consecutive repeating letters (common typosquatting technique)." });
+  }
+  if (features[3] > 3) {
+    reasons.push({ severity: "info", message: `High number of dots (${features[3]}) in URL.` });
+  }
+  if (features[6] >= 2) {
+    reasons.push({ severity: "info", message: `Multiple subdomains (${features[6]}) detected in host.` });
+  }
+  if (features[5] >= 2) {
+    reasons.push({ severity: "info", message: `Multiple hyphens (${features[5]}) in domain host.` });
+  }
+  if (features[0] > 75) {
+    reasons.push({ severity: "info", message: `URL is unusually long (${features[0]} characters).` });
+  }
+  if (features[17] < 0.25 || features[17] > 0.55) {
+    reasons.push({ severity: "info", message: `Unusual vowel-to-consonant ratio (${(features[17] * 100).toFixed(1)}%) in domain.` });
+  }
+  if (features[14] > 0.15) {
+    reasons.push({ severity: "info", message: `High ratio of digits (${(features[14] * 100).toFixed(1)}%) in URL.` });
+  }
+  if (features[22] > 3) {
+    reasons.push({ severity: "info", message: `Contains multiple query parameters (${features[22]}), typical of landing pages.` });
+  }
+  
+  return {
+    url: url,
+    result: classification,
+    risk_score: finalScore,
+    confidence: confidence,
+    reasons: reasons,
+    features_breakdown: features_breakdown,
+    model_version: mockModelVersion,
+    cached: false
+  };
 }
