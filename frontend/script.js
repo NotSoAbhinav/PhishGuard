@@ -26,6 +26,7 @@ let coldStartInterval = null;
 let isDemoMode = false;
 let mockModelVersion = "3.5.0-DEMO";
 let mockPendingFeedbackCount = 3;
+let demoBackgroundInterval = null;
 
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
@@ -49,6 +50,10 @@ document.addEventListener("DOMContentLoaded", () => {
       
       verifyApiHealth();
     });
+  }
+  const btnSwitchToLive = document.getElementById("btnSwitchToLive");
+  if (btnSwitchToLive) {
+    btnSwitchToLive.addEventListener("click", switchToLiveMode);
   }
 
   verifyApiHealth();
@@ -269,9 +274,49 @@ function enterDemoMode() {
   const modelVerBadge = document.getElementById("modelVerBadge");
   if (modelVerBadge) modelVerBadge.innerText = mockModelVersion;
 
+  // Show the Demo Mode Background Banner
+  const banner = document.getElementById("demoModeBanner");
+  const bannerText = document.getElementById("demoBannerText");
+  const btnSwitchToLive = document.getElementById("btnSwitchToLive");
+  if (banner) {
+    banner.classList.remove("hidden");
+    banner.classList.remove("ready");
+  }
+  if (bannerText) {
+    bannerText.innerText = "Running in simulated Demo Mode. Pinging live ML backend in background...";
+  }
+  if (btnSwitchToLive) {
+    btnSwitchToLive.classList.add("hidden");
+  }
+
   // Load simulated stats & history
   fetchGlobalStats();
   fetchHistory();
+
+  // Set up background connection check polling
+  if (demoBackgroundInterval) clearInterval(demoBackgroundInterval);
+  demoBackgroundInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/`, {
+        method: "GET",
+        headers: { "X-API-Key": API_KEY }
+      });
+      if (res.ok) {
+        // Live server is now awake and ready!
+        clearInterval(demoBackgroundInterval);
+        demoBackgroundInterval = null;
+
+        // Upgrade banner UI
+        if (banner) banner.classList.add("ready");
+        if (bannerText) bannerText.innerText = "Live ML Backend detected! Connected & ready to switch.";
+        if (btnSwitchToLive) btnSwitchToLive.classList.remove("hidden");
+
+        showToast("Live ML backend is now online! Click top banner to switch.", "⚡", 5000);
+      }
+    } catch (err) {
+      console.log("Background check: live backend still offline...");
+    }
+  }, 5000);
 
   // Exit loader screen smoothly
   setTimeout(() => {
@@ -279,6 +324,33 @@ function enterDemoMode() {
     if (loader) loader.classList.add("hidden");
     showToast("Offline Demo Mode activated successfully!", "⚡", 4000);
   }, 1000);
+}
+
+// 2aa. Switch from Demo Mode back to Live Mode
+function switchToLiveMode() {
+  isDemoMode = false;
+  if (demoBackgroundInterval) {
+    clearInterval(demoBackgroundInterval);
+    demoBackgroundInterval = null;
+  }
+
+  const banner = document.getElementById("demoModeBanner");
+  if (banner) {
+    banner.classList.add("hidden");
+    banner.classList.remove("ready");
+  }
+
+  const statusIndicator = document.getElementById("statusIndicator");
+  if (statusIndicator) {
+    statusIndicator.className = "status-indicator online";
+    statusIndicator.querySelector(".status-text").innerText = "API Online";
+  }
+
+  // Refresh live statistics and history
+  fetchGlobalStats();
+  fetchHistory();
+
+  showToast("Reverted to Live ML Backend!", "⚡", 4000);
 }
 
 // 2b. Verify API Health and Fetch Version / Metrics
