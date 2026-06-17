@@ -143,10 +143,31 @@ function getTerminalProgressBar(elapsed, duration) {
   return `[SYS] Booting Render VM: [${bar}] ${percentage}% (${remaining}s remaining)`;
 }
 
-// 2. Graphical Progress Loader Controller
-function updateGraphicalLoader(elapsed, duration) {
-  const pct = Math.min(100, Math.round((elapsed / duration) * 100));
-  
+// 2. Non-linear Staggered Progress Calculator (Jumps)
+function getSimulationProgress(elapsed) {
+  if (elapsed <= 3) {
+    // Stage 1: VM Allocation (0% to 25% in 3 seconds)
+    return Math.round((elapsed / 3) * 25);
+  } else if (elapsed <= 15) {
+    // Stage 2: Flask Startup (25% to 55%)
+    if (elapsed < 8) return 35;
+    if (elapsed < 12) return 48;
+    return 55;
+  } else if (elapsed <= 35) {
+    // Stage 3: Load Model weights (55% to 85%)
+    if (elapsed < 22) return 65;
+    if (elapsed < 28) return 76;
+    return 85;
+  } else {
+    // Stage 4: API Handshake (85% crawling to 98% asymptotically)
+    const extra = elapsed - 35;
+    const crawl = 85 + Math.round(13 * (1 - Math.exp(-0.15 * extra)));
+    return Math.min(98, crawl);
+  }
+}
+
+// 2a. Graphical Progress Loader Controller
+function updateGraphicalLoader(pct) {
   const progressPercentText = document.getElementById("loaderProgressPercent");
   const progressFill = document.getElementById("loaderProgressFill");
   const progressStatusText = document.getElementById("loaderProgressStatus");
@@ -164,7 +185,7 @@ function updateGraphicalLoader(elapsed, duration) {
     } else if (pct < 100) {
       progressStatusText.innerText = "Establishing API handshake...";
     } else {
-      progressStatusText.innerText = "Waiting for handshake...";
+      progressStatusText.innerText = "Connected!";
     }
   }
 
@@ -203,7 +224,7 @@ function updateGraphicalLoader(elapsed, duration) {
   if (pct >= 85 && pct < 100) {
     if (stepReady) { stepReady.className = "boot-step active"; }
   } else if (pct >= 100) {
-    if (stepReady) { stepReady.className = "boot-step active"; }
+    if (stepReady) { stepReady.className = "boot-step completed"; }
   } else {
     if (pct < 85 && stepReady) { stepReady.className = "boot-step"; }
   }
@@ -383,8 +404,9 @@ function startColdStartCountdown() {
       progressLine.innerText = getTerminalProgressBar(elapsed, duration);
     }
 
-    // Update graphical loader and pipeline checklist steps
-    updateGraphicalLoader(elapsed, duration);
+    // Update graphical loader and pipeline checklist steps via staggered jumps
+    const currentPct = getSimulationProgress(elapsed);
+    updateGraphicalLoader(currentPct);
 
     // Print helpful logging check-ins as time passes
     if (elapsed === 10) {
@@ -416,22 +438,8 @@ function startColdStartCountdown() {
           printTerminalLine("API Server is awake! Connected successfully.", "text-success");
           printTerminalLine("Entering Dashboard...", "text-info");
 
-          // Update checklist to completed
-          const stepVM = document.getElementById("stepVM");
-          const stepFlask = document.getElementById("stepFlask");
-          const stepModel = document.getElementById("stepModel");
-          const stepReady = document.getElementById("stepReady");
-          if (stepVM) stepVM.className = "boot-step completed";
-          if (stepFlask) stepFlask.className = "boot-step completed";
-          if (stepModel) stepModel.className = "boot-step completed";
-          if (stepReady) stepReady.className = "boot-step completed";
-
-          const progressPercentText = document.getElementById("loaderProgressPercent");
-          const progressFill = document.getElementById("loaderProgressFill");
-          const progressStatusText = document.getElementById("loaderProgressStatus");
-          if (progressPercentText) progressPercentText.innerText = "100%";
-          if (progressFill) progressFill.style.width = "100%";
-          if (progressStatusText) progressStatusText.innerText = "Connected!";
+          // Force visual checklist and progress bar to 100% instantly
+          updateGraphicalLoader(100);
 
           const statusIndicator = document.getElementById("statusIndicator");
           if (statusIndicator) {
