@@ -21,6 +21,7 @@ let isInspectorExpanded = false;
 let currentFilter = "all";
 let isColdStartActive = false;
 let coldStartInterval = null;
+let offlineWarningsPrinted = false;
 
 // Offline Demo Mode State
 let isDemoMode = false;
@@ -46,10 +47,23 @@ document.addEventListener("DOMContentLoaded", () => {
       if (progressStatusText) progressStatusText.innerText = "Re-connecting...";
       btnRetryInit.classList.add("hidden");
       
-      const connLine = document.getElementById("termLineConnecting");
-      if (connLine) connLine.innerText = "[SYS] Establishing API handshake...";
+      const body = document.getElementById("terminalBody");
+      if (body) {
+        body.innerHTML = '<span class="terminal-cursor"></span>';
+      }
       
-      verifyApiHealth();
+      offlineWarningsPrinted = false;
+      
+      const retryLines = [
+        { text: "./phishguard-init.sh --retry", type: "prompt" },
+        { text: "[SYS] Re-verifying virtual networking interface...", type: "text-info" },
+        { text: "[SYS] Establishing API handshake...", type: "", options: { id: "termLineConnecting" } }
+      ];
+      
+      printTerminalLinesSequentially(retryLines, () => {
+        startColdStartCountdown(false);
+        verifyApiHealth();
+      });
     });
   }
   const btnSwitchToLive = document.getElementById("btnSwitchToLive");
@@ -57,7 +71,27 @@ document.addEventListener("DOMContentLoaded", () => {
     btnSwitchToLive.addEventListener("click", switchToLiveMode);
   }
 
-  verifyApiHealth();
+  // Clear terminal and type initial boot lines sequentially
+  const body = document.getElementById("terminalBody");
+  if (body) {
+    body.innerHTML = '<span class="terminal-cursor"></span>';
+  }
+  
+  const initialBootLines = [
+    { text: "./phishguard-init.sh", type: "prompt" },
+    { text: "[SYS] Checking host system configuration...", type: "text-info" },
+    { text: "[SYS] Memory Allocation: 512MB RAM Limit [OK]", type: "text-info" },
+    { text: "[SYS] Kernel: Render Virtual Linux Container v5.15", type: "text-info" },
+    { text: "[SYS] Booting PhishGuard Threat Auditor v3.5.0...", type: "text-info" },
+    { text: "[SYS] Establishing API handshake...", type: "", options: { id: "termLineConnecting" } }
+  ];
+
+  printTerminalLinesSequentially(initialBootLines, () => {
+    // Start the countdown timer and crawlers once the handshake has been established
+    startColdStartCountdown(false);
+    verifyApiHealth();
+  });
+  
   updateThresholdDisplay(50);
 });
 
@@ -107,8 +141,8 @@ function updatePendingFeedbackUI(count, threshold) {
 
 
 
-// 2. Helper: Print line in Hacker Terminal
-function printTerminalLine(text, type = "") {
+// // 2. Helper: Print line in Hacker Terminal with Typing Animation
+function printTerminalLine(text, type = "", instant = false, options = {}) {
   const body = document.getElementById("terminalBody");
   if (!body) return null;
   
@@ -118,11 +152,8 @@ function printTerminalLine(text, type = "") {
   
   const line = document.createElement("div");
   line.className = `terminal-line ${type}`;
-  
-  if (type === "prompt") {
-    line.innerHTML = `<span class="t-prompt">$</span> ${text}`;
-  } else {
-    line.innerText = text;
+  if (options.id) {
+    line.id = options.id;
   }
   
   body.appendChild(line);
@@ -134,7 +165,73 @@ function printTerminalLine(text, type = "") {
   
   // Auto-scroll to bottom
   body.scrollTop = body.scrollHeight;
+
+  if (instant) {
+    if (type === "prompt") {
+      line.innerHTML = `<span class="t-prompt">$</span> ${text}`;
+    } else {
+      line.innerText = text;
+    }
+  } else {
+    let i = 0;
+    const isHtml = type === "prompt";
+    const fullText = text;
+    
+    if (isHtml) {
+      line.innerHTML = `<span class="t-prompt">$</span> `;
+    }
+    
+    cursor.classList.add("typing");
+    
+    function typeChar() {
+      if (isDemoMode) {
+        cursor.classList.remove("typing");
+        return;
+      }
+      if (i < fullText.length) {
+        if (isHtml) {
+          line.innerHTML = `<span class="t-prompt">$</span> ${fullText.substring(0, i + 1)}`;
+        } else {
+          line.innerText = fullText.substring(0, i + 1);
+        }
+        i++;
+        body.scrollTop = body.scrollHeight;
+        setTimeout(typeChar, 10 + Math.random() * 10); // 10-20ms per character
+      } else {
+        cursor.classList.remove("typing");
+      }
+    }
+    typeChar();
+  }
+  
   return line;
+}
+
+// Helper: Print a list of lines sequentially with typing animations
+function printTerminalLinesSequentially(lines, callback) {
+  let lineIndex = 0;
+  
+  function printNext() {
+    if (isDemoMode) return;
+    if (lineIndex < lines.length) {
+      const { text, type, instant, options } = lines[lineIndex];
+      lineIndex++;
+      
+      printTerminalLine(text, type, instant, options);
+      
+      if (instant) {
+        setTimeout(printNext, 100);
+      } else {
+        // Pauses 200ms after finished typing
+        const typingDuration = text.length * 15 + 200;
+        setTimeout(printNext, typingDuration);
+      }
+    } else {
+      if (callback) callback();
+    }
+  }
+  
+  printNext();
 }
 
 // Helper: Generate text progress bar for cold starts
@@ -341,9 +438,10 @@ function enterDemoMode() {
   if (demoBackgroundInterval) clearInterval(demoBackgroundInterval);
   demoBackgroundInterval = setInterval(async () => {
     try {
-      const res = await fetch(`${API_BASE}/`, {
+      const res = await fetchWithTimeout(`${API_BASE}/`, {
         method: "GET",
-        headers: { "X-API-Key": API_KEY }
+        headers: { "X-API-Key": API_KEY },
+        timeout: 4000
       });
       if (res.ok) {
         // Live server is now awake and ready!
@@ -397,6 +495,26 @@ function switchToLiveMode() {
   showToast("Reverted to Live ML Backend!", "⚡", 4000);
 }
 
+// Helper: Fetch with timeout
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 4000 } = options;
+  
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
 // 2b. Verify API Health and Fetch Version / Metrics
 async function verifyApiHealth() {
   if (isDemoMode) return;
@@ -406,9 +524,10 @@ async function verifyApiHealth() {
   const connectingLine = document.getElementById("termLineConnecting");
 
   try {
-    const res = await fetch(`${API_BASE}/`, {
+    const res = await fetchWithTimeout(`${API_BASE}/`, {
       method: "GET",
-      headers: { "X-API-Key": API_KEY }
+      headers: { "X-API-Key": API_KEY },
+      timeout: 4000
     });
 
     if (res.ok) {
@@ -456,33 +575,40 @@ async function verifyApiHealth() {
     
     if (connectingLine) connectingLine.innerText = "[SYS] Establishing API handshake... [TIMEOUT]";
     
-    // Start cold start countdown in the terminal
-    startColdStartCountdown();
+    // Start cold start countdown in the terminal with isAlreadyKnownOffline = true
+    startColdStartCountdown(true);
   }
 }
 
 // 2c. Cold Start Countdown & Background Polling (Terminal-themed)
-function startColdStartCountdown() {
-  if (isColdStartActive || isDemoMode) return;
+// 2c. Cold Start Countdown & Background Polling (Terminal-themed)
+function startColdStartCountdown(isAlreadyKnownOffline = false) {
+  if (isDemoMode) return;
+
+  if (isAlreadyKnownOffline && !offlineWarningsPrinted) {
+    offlineWarningsPrinted = true;
+    const isLocal = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
+    if (isLocal) {
+      printTerminalLine("Local API offline. Server not detected at " + API_BASE, "text-warn");
+      printTerminalLine("[SYS] Startup command: python backend/app.py", "text-info");
+      printTerminalLine("[SYS] Ensure dependencies are installed from requirements.txt", "text-info");
+      printTerminalLine("You can also run in Offline Demo Mode using the panel on the right.", "text-info");
+    } else {
+      printTerminalLine("Production API offline. Sleep state detected.", "text-warn");
+      printTerminalLine("Initiating server wake-up sequence...", "text-info");
+    }
+  }
+
+  if (isColdStartActive) return;
   isColdStartActive = true;
 
-  const isLocal = API_BASE.includes("127.0.0.1") || API_BASE.includes("localhost");
-
-  if (isLocal) {
-    printTerminalLine("Local API offline. Server not detected at " + API_BASE, "text-warn");
-    printTerminalLine("[SYS] Startup command: python backend/app.py", "text-info");
-    printTerminalLine("[SYS] Ensure dependencies are installed from requirements.txt", "text-info");
-    printTerminalLine("You can also run in Offline Demo Mode using the panel on the right.", "text-info");
-  } else {
-    printTerminalLine("Production API offline. Sleep state detected.", "text-warn");
-    printTerminalLine("Initiating server wake-up sequence...", "text-info");
-  }
+  printTerminalLine("Initiating backend connection check...", "text-info");
   
   let elapsed = 0;
   const duration = 50; // Render free tier container boots in ~50 seconds
 
-  // Create progress bar line in the terminal
-  const progressLine = printTerminalLine(getTerminalProgressBar(0, duration), "text-info");
+  // Create progress bar line in the terminal (instant printing, no typing animation)
+  const progressLine = printTerminalLine(getTerminalProgressBar(0, duration), "text-info", true);
 
   // Show retry button so they can manually trigger it anytime
   const retryBtn = document.getElementById("btnRetryInit");
@@ -511,24 +637,35 @@ function startColdStartCountdown() {
     updateGraphicalLoader(currentPct);
 
     // Print helpful logging check-ins as time passes
-    if (elapsed === 10) {
-      printTerminalLine("[SYS] Allocating Render container resources...", "text-info");
+    if (elapsed === 5) {
+      printTerminalLine("[SYS] Verifying Docker base layer caches... [CACHE HIT]", "text-info");
+    } else if (elapsed === 10) {
+      printTerminalLine("[SYS] Allocating Render container vCPU & resource limits...", "text-info");
+    } else if (elapsed === 15) {
+      printTerminalLine("[SYS] Spawning daemon supervisors (Supervisorctl/Systemd)...", "text-info");
     } else if (elapsed === 20) {
-      printTerminalLine("[SYS] Booting virtual machine kernel...", "text-info");
+      printTerminalLine("[SYS] Booting virtual machine sandbox kernel environment...", "text-info");
+    } else if (elapsed === 25) {
+      printTerminalLine("[SYS] Binding socket to local address 0.0.0.0:5000...", "text-info");
     } else if (elapsed === 30) {
-      printTerminalLine("[SYS] Loading dependencies & Flask server (Gunicorn)...", "text-info");
+      printTerminalLine("[SYS] Launching WSGI application server (Gunicorn workers)...", "text-info");
+    } else if (elapsed === 35) {
+      printTerminalLine("[SYS] Fetching configuration schema and feature list mapping...", "text-info");
     } else if (elapsed === 40) {
-      printTerminalLine("[SYS] Loading Random Forest model weights (24 dimensions)...", "text-info");
+      printTerminalLine("[SYS] De-serializing Random Forest weights (24 dimensions)...", "text-info");
     } else if (elapsed === 45) {
-      printTerminalLine("[SYS] Overwriting weights from model-sync branch...", "text-info");
+      printTerminalLine("[SYS] Syncing branch weights with production-model-sync...", "text-info");
+    } else if (elapsed === 50) {
+      printTerminalLine("[SYS] Setting up SSL/TLS reverse proxy handshake check...", "text-info");
     }
 
     // Every 5 seconds (or when timer hits 0), check if the server is back online
     if (elapsed % 5 === 0 || remaining === 0) {
       try {
-        const checkRes = await fetch(`${API_BASE}/`, {
+        const checkRes = await fetchWithTimeout(`${API_BASE}/`, {
           method: "GET",
-          headers: { "X-API-Key": API_KEY }
+          headers: { "X-API-Key": API_KEY },
+          timeout: 4000
         });
 
         if (checkRes.ok) {

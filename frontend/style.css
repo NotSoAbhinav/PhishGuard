@@ -1580,6 +1580,11 @@ body::before {
   50% { background-color: #10b981 }
 }
 
+.terminal-cursor.typing {
+  animation: none !important;
+  background-color: #10b981 !important;
+}
+
 .hidden {
   display: none !important;
 }
