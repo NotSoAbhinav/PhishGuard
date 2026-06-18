@@ -1534,6 +1534,12 @@ body::before {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  animation: lineFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes lineFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .terminal-line .t-prompt {
@@ -1630,6 +1636,30 @@ body::before {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(59, 130, 246, 0.05);
   color: var(--text-primary);
   text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.loader-info-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(37, 99, 235, 0.05), rgba(59, 130, 246, 0.35));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: cardBorderGlow 4s ease-in-out infinite alternate;
+}
+
+@keyframes cardBorderGlow {
+  0% { opacity: 0.3; filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.2)); }
+  100% { opacity: 1; filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.5)); }
 }
 
 .info-card-header {
@@ -1649,6 +1679,14 @@ body::before {
 
 .info-card-icon {
   font-size: 20px;
+  animation: spinPulse 4s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes spinPulse {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(15deg); }
+  100% { transform: scale(1) rotate(0deg); }
 }
 
 .info-description {
@@ -1708,10 +1746,24 @@ body::before {
 .g-progress-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  background: linear-gradient(
+    90deg, 
+    var(--primary) 0%, 
+    #60a5fa 30%, 
+    #93c5fd 50%, 
+    #60a5fa 70%, 
+    var(--primary) 100%
+  );
+  background-size: 200% auto;
   border-radius: 4px;
   transition: width 0.3s ease;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+  animation: shimmerWave 2s linear infinite;
+}
+
+@keyframes shimmerWave {
+  0% { background-position: 0% 50%; }
+  100% { background-position: -200% 50%; }
 }
 
 /* Boot Pipeline Visual Checklist */
@@ -1751,7 +1803,7 @@ body::before {
 .boot-step.active .step-dot {
   background: var(--primary);
   box-shadow: 0 0 8px var(--primary);
-  animation: pulseDot 1.5s infinite alternate;
+  animation: breathingPulse 1.5s ease-in-out infinite;
 }
 
 .boot-step.completed .step-dot {
@@ -1759,9 +1811,10 @@ body::before {
   box-shadow: 0 0 6px var(--safe);
 }
 
-@keyframes pulseDot {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(1.2); opacity: 1; }
+@keyframes breathingPulse {
+  0% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 4px rgba(59, 130, 246, 0.4); }
+  50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 12px rgba(59, 130, 246, 0.8); }
+  100% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 4px rgba(59, 130, 246, 0.4); }
 }
 
 .boot-step .step-label {

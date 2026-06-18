@@ -27,6 +27,7 @@ let isDemoMode = false;
 let mockModelVersion = "3.5.0-DEMO";
 let mockPendingFeedbackCount = 3;
 let demoBackgroundInterval = null;
+let lastCalculatedProgress = 0;
 
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
@@ -164,15 +165,32 @@ function getSimulationProgress(elapsed) {
     if (elapsed < 28) return 76;
     return 85;
   } else {
-    // Stage 4: API Handshake (85% crawling to 98% asymptotically)
+    // Stage 4: API Handshake (85% crawling to 99% asymptotically, then crawling indefinitely)
     const extra = elapsed - 35;
-    const crawl = 85 + Math.round(13 * (1 - Math.exp(-0.15 * extra)));
-    return Math.min(98, crawl);
+    const crawl = 85 + (14 * (1 - Math.exp(-0.08 * extra)));
+    
+    if (crawl < 99) {
+      return parseFloat(crawl.toFixed(1));
+    } else {
+      // Indefinite high-precision crawl after 99%
+      // Every second after the 99% mark (elapsed approx 70), we add a tiny deterministic increment
+      const decimalExtra = elapsed - 70;
+      const baseCrawl = 99 + Math.max(0, decimalExtra) * 0.00015;
+      
+      // Add a deterministic pseudo-random micro-fluctuation to make the last decimal digits feel alive
+      const fluctuation = (Math.sin(elapsed) * 0.5 + 0.5) * 0.00008;
+      const finalPct = baseCrawl + fluctuation;
+      
+      // Return a high-precision float (capped infinitesimally below 100% so it never hits 100% before API wakes up)
+      return Math.min(99.9999, parseFloat(finalPct.toFixed(6)));
+    }
   }
 }
 
 // 2a. Graphical Progress Loader Controller
 function updateGraphicalLoader(pct) {
+  lastCalculatedProgress = pct;
+  
   const progressPercentText = document.getElementById("loaderProgressPercent");
   const progressFill = document.getElementById("loaderProgressFill");
   const progressStatusText = document.getElementById("loaderProgressStatus");
@@ -233,6 +251,32 @@ function updateGraphicalLoader(pct) {
   } else {
     if (pct < 85 && stepReady) { stepReady.className = "boot-step"; }
   }
+}
+
+// 2b. Smooth Progress Animation to 100% on Connect
+function animateProgressTo100(startVal, callback) {
+  const duration = 800; // 800ms to crawl to 100%
+  const startTimestamp = performance.now();
+  
+  function step(timestamp) {
+    const elapsed = timestamp - startTimestamp;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Smooth easeOutQuad mapping
+    const current = startVal + (100 - startVal) * progress;
+    
+    // Update the progress UI
+    updateGraphicalLoader(parseFloat(current.toFixed(1)));
+    
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    } else {
+      updateGraphicalLoader(100);
+      if (callback) callback();
+    }
+  }
+  
+  window.requestAnimationFrame(step);
 }
 
 // 2a. Action: Enter Offline Demo Mode
@@ -376,35 +420,6 @@ async function verifyApiHealth() {
       printTerminalLine(`Model version v${data.model_version} loaded.`, "text-success");
       printTerminalLine("Entering Dashboard...", "text-info");
 
-      // Mark visual checklist completed
-      const stepVM = document.getElementById("stepVM");
-      const stepFlask = document.getElementById("stepFlask");
-      const stepModel = document.getElementById("stepModel");
-      const stepReady = document.getElementById("stepReady");
-      if (stepVM) stepVM.className = "boot-step completed";
-      if (stepFlask) stepFlask.className = "boot-step completed";
-      if (stepModel) stepModel.className = "boot-step completed";
-      if (stepReady) stepReady.className = "boot-step completed";
-
-      const progressPercentText = document.getElementById("loaderProgressPercent");
-      const progressFill = document.getElementById("loaderProgressFill");
-      const progressStatusText = document.getElementById("loaderProgressStatus");
-      if (progressPercentText) progressPercentText.innerText = "100%";
-      if (progressFill) progressFill.style.width = "100%";
-      if (progressStatusText) progressStatusText.innerText = "Handshake success!";
-
-      if (statusIndicator) {
-        statusIndicator.className = "status-indicator online";
-        statusIndicator.querySelector(".status-text").innerText = "API Online";
-      }
-      if (modelVerBadge) modelVerBadge.innerText = `v${data.model_version}`;
-      
-      // Dismiss the terminal overlay after a short delay for premium UX
-      setTimeout(() => {
-        const loader = document.getElementById("apiLoaderScreen");
-        if (loader) loader.classList.add("hidden");
-      }, 1000);
-
       if (coldStartInterval) {
         clearInterval(coldStartInterval);
         coldStartInterval = null;
@@ -414,6 +429,21 @@ async function verifyApiHealth() {
       // Load general statistics and history feed
       fetchGlobalStats();
       fetchHistory();
+
+      // Crawl smoothly to 100% before closing loader
+      animateProgressTo100(lastCalculatedProgress, () => {
+        if (statusIndicator) {
+          statusIndicator.className = "status-indicator online";
+          statusIndicator.querySelector(".status-text").innerText = "API Online";
+        }
+        if (modelVerBadge) modelVerBadge.innerText = `v${data.model_version}`;
+        
+        // Dismiss the terminal overlay after a short delay for premium UX
+        setTimeout(() => {
+          const loader = document.getElementById("apiLoaderScreen");
+          if (loader) loader.classList.add("hidden");
+        }, 400);
+      });
     } else {
       throw new Error("API responded with error");
     }
@@ -510,14 +540,20 @@ function startColdStartCountdown() {
           printTerminalLine("API Server is awake! Connected successfully.", "text-success");
           printTerminalLine("Entering Dashboard...", "text-info");
 
-          // Force visual checklist and progress bar to 100% instantly
-          updateGraphicalLoader(100);
+          // Crawl smoothly to 100% before closing loader
+          animateProgressTo100(lastCalculatedProgress, () => {
+            const statusIndicator = document.getElementById("statusIndicator");
+            if (statusIndicator) {
+              statusIndicator.className = "status-indicator online";
+              statusIndicator.querySelector(".status-text").innerText = "API Online";
+            }
 
-          const statusIndicator = document.getElementById("statusIndicator");
-          if (statusIndicator) {
-            statusIndicator.className = "status-indicator online";
-            statusIndicator.querySelector(".status-text").innerText = "API Online";
-          }
+            // Smoothly exit the terminal loader screen
+            setTimeout(() => {
+              const loader = document.getElementById("apiLoaderScreen");
+              if (loader) loader.classList.add("hidden");
+            }, 400);
+          });
 
           // Reload all components
           const data = await checkRes.json();
@@ -526,12 +562,6 @@ function startColdStartCountdown() {
 
           fetchGlobalStats();
           fetchHistory();
-
-          // Smoothly exit the terminal loader screen
-          setTimeout(() => {
-            const loader = document.getElementById("apiLoaderScreen");
-            if (loader) loader.classList.add("hidden");
-          }, 1200);
 
           showToast("API Server is awake! Connected successfully.", "⚡", 4000);
         }
