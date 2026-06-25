@@ -1,8 +1,8 @@
 {
   "version": "3.0.4",
-  "trained_at": "2026-06-25T11:10:01.275257Z",
-  "samples_count": 235,
-  "cv_accuracy": 0.9829787234042554,
+  "trained_at": "2026-06-25T11:10:05.375029Z",
+  "samples_count": 237,
+  "cv_accuracy": 0.9831560283687943,
   "test_accuracy": 1.0,
   "features_count": 24
 }
