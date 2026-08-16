@@ -33,6 +33,8 @@ let lastCalculatedProgress = 0;
 // 1. Initialize Dashboard on Load
 document.addEventListener("DOMContentLoaded", () => {
   initChart();
+  initRotatingSecurityTips();
+  initInteractiveTerminalCli();
   
   // Bind loader screen actions
   const btnLaunchDemo = document.getElementById("btnLaunchDemo");
@@ -141,7 +143,168 @@ function updatePendingFeedbackUI(count, threshold) {
 
 
 
-// // 2. Helper: Print line in Hacker Terminal with Typing Animation
+// Rotating Security Tips Data
+const CYBER_SECURITY_TIPS = [
+  "85%+ of modern phishing attacks now use valid HTTPS/SSL certificates to disguise malicious domains.",
+  "IDN Homograph attacks use visually identical Unicode characters (e.g. Cyrillic 'а' replacing Latin 'a') to spoof brand URLs.",
+  "PhishGuard extracts 24 mathematical features from raw URLs, including Shannon Entropy, token depth, and anchor ratios.",
+  "Legitimate financial institutions will never ask for urgent credential verification via URL shorteners like bit.ly.",
+  "High Shannon Entropy in a subdomain often indicates automated domain generation algorithms (DGA) used by malware.",
+  "Phishing kits often use brand-squatting subdomains (e.g., login-paypal-security.verification.net) to fool users.",
+  "Checking URL path depth and consecutive hyphens helps detect phishing links trying to conceal target domains.",
+  "Our Random Forest classifier aggregates predictions from 100 decision trees to maintain 97%+ precision."
+];
+
+let currentTipIndex = 0;
+let tipRotationInterval = null;
+
+function initRotatingSecurityTips() {
+  const tipElem = document.getElementById("securityTipText");
+  if (!tipElem || tipRotationInterval) return;
+
+  tipRotationInterval = setInterval(() => {
+    currentTipIndex = (currentTipIndex + 1) % CYBER_SECURITY_TIPS.length;
+    tipElem.classList.add("fading");
+    setTimeout(() => {
+      tipElem.innerText = CYBER_SECURITY_TIPS[currentTipIndex];
+      tipElem.classList.remove("fading");
+    }, 300);
+  }, 6000);
+}
+
+// Helper: Update Live Telemetry HUD
+function updateTelemetryHud(elapsed, rtt = null) {
+  const elapsedElem = document.getElementById("hudElapsed");
+  const etaElem = document.getElementById("hudEta");
+  const latencyElem = document.getElementById("hudLatency");
+
+  if (elapsedElem) elapsedElem.innerText = `${elapsed}s`;
+  if (etaElem) {
+    const remaining = Math.max(0, 50 - elapsed);
+    etaElem.innerText = remaining > 0 ? `~${remaining}s` : "Waking...";
+  }
+  if (latencyElem && rtt !== null) {
+    latencyElem.innerText = `${Math.round(rtt)}ms`;
+    latencyElem.style.color = rtt < 150 ? "#34d399" : (rtt < 400 ? "#fbbf24" : "#f87171");
+  }
+}
+
+// Helper: Interactive Terminal CLI
+function initInteractiveTerminalCli() {
+  const form = document.getElementById("terminalCliForm");
+  const input = document.getElementById("terminalCliInput");
+  const quickBtns = document.querySelectorAll(".cmd-chip");
+
+  if (quickBtns) {
+    quickBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cmd = btn.getAttribute("data-cmd");
+        if (cmd) executeTerminalCommand(cmd);
+      });
+    });
+  }
+
+  if (form && input) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const cmd = input.value.trim();
+      if (!cmd) return;
+      input.value = "";
+      executeTerminalCommand(cmd);
+    });
+  }
+}
+
+async function executeTerminalCommand(cmd) {
+  const normalized = cmd.toLowerCase().trim();
+  printTerminalLine(cmd, "prompt", true);
+
+  switch (normalized) {
+    case "help":
+      printTerminalLine("Available Commands:", "text-info", true);
+      printTerminalLine("  • status   - View current boot status, progress & ETA", "", true);
+      printTerminalLine("  • ping     - Measure live latency to backend API", "", true);
+      printTerminalLine("  • tips     - Display a new threat intel security tip", "", true);
+      printTerminalLine("  • stats    - Display ML model architecture & metrics", "", true);
+      printTerminalLine("  • demo     - Enter Instant Offline Demo Mode", "", true);
+      printTerminalLine("  • matrix   - Stream cyber rain diagnostic feed", "", true);
+      printTerminalLine("  • retry    - Trigger immediate connection re-check", "", true);
+      printTerminalLine("  • clear    - Clear terminal log output", "", true);
+      break;
+
+    case "status":
+      printTerminalLine(`[STATUS] Progress: ${lastCalculatedProgress}% | Mode: ${isDemoMode ? "DEMO" : "CONNECTING"}`, "text-info", true);
+      printTerminalLine(`[STATUS] Target Host: ${API_BASE} | Handshake: ${isColdStartActive ? "In Progress" : "Pending"}`, "", true);
+      break;
+
+    case "ping":
+      printTerminalLine(`[NET] Pinging ${API_BASE}/ ...`, "", true);
+      const t0 = performance.now();
+      try {
+        const res = await fetchWithTimeout(`${API_BASE}/`, { method: "GET", headers: { "X-API-Key": API_KEY }, timeout: 3000 });
+        const rtt = performance.now() - t0;
+        updateTelemetryHud(0, rtt);
+        if (res.ok) {
+          printTerminalLine(`[NET] 64 bytes from ${API_BASE}: icmp_seq=1 time=${rtt.toFixed(1)}ms status=200 OK`, "text-success", true);
+        } else {
+          printTerminalLine(`[NET] Server responded with HTTP ${res.status} (${rtt.toFixed(1)}ms)`, "text-warn", true);
+        }
+      } catch (err) {
+        printTerminalLine(`[NET] Ping timeout (${API_BASE} unreachable or waking up)`, "text-warn", true);
+      }
+      break;
+
+    case "tips":
+      currentTipIndex = (currentTipIndex + 1) % CYBER_SECURITY_TIPS.length;
+      const tip = CYBER_SECURITY_TIPS[currentTipIndex];
+      const tipElem = document.getElementById("securityTipText");
+      if (tipElem) tipElem.innerText = tip;
+      printTerminalLine(`[TIP] ${tip}`, "text-info", true);
+      break;
+
+    case "stats":
+      printTerminalLine("[ML MODEL] Random Forest URL Threat Classifier v3.5.0", "text-info", true);
+      printTerminalLine("  • Estimators: 100 Decision Trees | Criterion: Gini", "", true);
+      printTerminalLine("  • Input Dimensions: 24 Heuristic & Shannon Entropy Features", "", true);
+      printTerminalLine("  • Target Accuracy: 97.4% | Inference Latency: <15ms", "", true);
+      break;
+
+    case "demo":
+      printTerminalLine("[SYS] Switching to simulated Offline Demo Mode...", "text-success", true);
+      enterDemoMode();
+      break;
+
+    case "clear":
+      const body = document.getElementById("terminalBody");
+      if (body) {
+        body.innerHTML = '<span class="terminal-cursor"></span>';
+      }
+      break;
+
+    case "matrix":
+      printTerminalLine("[SYS] Initializing cyber stream telemetry...", "text-success", true);
+      const hexChars = "0123456789ABCDEF!@#$%^&*()_+-=[]{}|;:,.<>?";
+      for (let j = 0; j < 3; j++) {
+        let stream = "";
+        for (let k = 0; k < 36; k++) {
+          stream += hexChars.charAt(Math.floor(Math.random() * hexChars.length));
+        }
+        printTerminalLine(`0x${(Math.random()*0xFFFFFF<<0).toString(16).padStart(6, '0')} ${stream}`, "text-success", true);
+      }
+      break;
+
+    case "retry":
+      printTerminalLine("[SYS] Re-initiating connection handshake check...", "text-info", true);
+      verifyApiHealth();
+      break;
+
+    default:
+      printTerminalLine(`bash: ${cmd}: command not found. Type 'help' for options.`, "text-warn", true);
+      break;
+  }
+}
+
+// 2. Helper: Print line in Hacker Terminal with Typing Animation
 function printTerminalLine(text, type = "", instant = false, options = {}) {
   const body = document.getElementById("terminalBody");
   if (!body) return null;
@@ -523,12 +686,15 @@ async function verifyApiHealth() {
   const modelVerBadge = document.getElementById("modelVerBadge");
   const connectingLine = document.getElementById("termLineConnecting");
 
+  const t0 = performance.now();
   try {
     const res = await fetchWithTimeout(`${API_BASE}/`, {
       method: "GET",
       headers: { "X-API-Key": API_KEY },
       timeout: 4000
     });
+    const rtt = performance.now() - t0;
+    updateTelemetryHud(0, rtt);
 
     if (res.ok) {
       const data = await res.json();
@@ -626,6 +792,7 @@ function startColdStartCountdown(isAlreadyKnownOffline = false) {
 
     elapsed++;
     const remaining = Math.max(0, duration - elapsed);
+    updateTelemetryHud(elapsed);
 
     // Update terminal progress bar
     if (progressLine) {
@@ -661,12 +828,15 @@ function startColdStartCountdown(isAlreadyKnownOffline = false) {
 
     // Every 5 seconds (or when timer hits 0), check if the server is back online
     if (elapsed % 5 === 0 || remaining === 0) {
+      const t0 = performance.now();
       try {
         const checkRes = await fetchWithTimeout(`${API_BASE}/`, {
           method: "GET",
           headers: { "X-API-Key": API_KEY },
           timeout: 4000
         });
+        const rtt = performance.now() - t0;
+        updateTelemetryHud(elapsed, rtt);
 
         if (checkRes.ok) {
           // Success! API is awake
