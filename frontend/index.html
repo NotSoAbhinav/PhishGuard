@@ -36,6 +36,23 @@
             <div class="terminal-body" id="terminalBody">
               <span class="terminal-cursor"></span>
             </div>
+            <!-- Interactive CLI Prompt -->
+            <div class="terminal-cli-bar">
+              <div class="terminal-quick-cmds">
+                <span class="cmd-label">Quick:</span>
+                <button type="button" class="cmd-chip" data-cmd="status">status</button>
+                <button type="button" class="cmd-chip" data-cmd="ping">ping</button>
+                <button type="button" class="cmd-chip" data-cmd="tips">tips</button>
+                <button type="button" class="cmd-chip" data-cmd="demo">demo</button>
+                <button type="button" class="cmd-chip" data-cmd="help">help</button>
+                <button type="button" class="cmd-chip" data-cmd="clear">clear</button>
+              </div>
+              <form id="terminalCliForm" class="terminal-input-form">
+                <span class="t-prompt">$</span>
+                <input type="text" id="terminalCliInput" placeholder="Type a command (try 'ping', 'status', 'help')..." autocomplete="off" spellcheck="false">
+                <button type="submit" class="terminal-send-btn">↵</button>
+              </form>
+            </div>
           </div>
         </div>
 
@@ -46,11 +63,43 @@
               <span class="info-card-icon">💡</span>
               <h3>System Boot Details</h3>
             </div>
+
+            <!-- Live Telemetry HUD -->
+            <div class="telemetry-hud">
+              <div class="telemetry-item">
+                <span class="telemetry-label">Elapsed</span>
+                <span class="telemetry-val" id="hudElapsed">0s</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">Est. ETA</span>
+                <span class="telemetry-val" id="hudEta">~50s</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">API Latency</span>
+                <span class="telemetry-val" id="hudLatency">Checking...</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">Model Dim</span>
+                <span class="telemetry-val text-accent">24 Feats</span>
+              </div>
+            </div>
+
             <p class="info-description">
               Our API uses Render's free hosting tier, which goes into a temporary sleep state after 15 minutes of inactivity. 
             </p>
             <div class="cold-start-explainer">
               <strong>Why the wait?</strong> The server must build the virtual environment and load our 24-dimensional Random Forest model weights into memory. Once awake, all audits are instantaneous!
+            </div>
+
+            <!-- Rotating Cyber Threat & URL Insights Tip Box -->
+            <div class="security-tips-box">
+              <div class="tip-header">
+                <span class="tip-icon">🛡️</span>
+                <span class="tip-title">Threat Intel & Analysis Tip</span>
+              </div>
+              <p class="tip-content" id="securityTipText">
+                85%+ of modern phishing attacks now use valid HTTPS/SSL certificates to disguise malicious domains.
+              </p>
             </div>
 
             <!-- Graphical Progress Bar -->
